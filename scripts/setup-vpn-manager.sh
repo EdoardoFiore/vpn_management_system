@@ -109,7 +109,7 @@ if [[ ${#split_tunnel_routes[@]} -gt 0 ]]; then
   log_info "Applicazione della configurazione split-tunneling..."
 
   # Commenta il redirect-gateway di default
-  sed -i 's|^push "redirect-gateway def1.*|# &|' /etc/openvpn/server/server.conf
+  sed -i 's|^push "redirect-gateway def1.*|# &|' /etc/openvpn/server.conf
   if [[ $? -ne 0 ]]; then
     log_error "Modifica di server.conf per lo split-tunneling fallita."
     exit 1
