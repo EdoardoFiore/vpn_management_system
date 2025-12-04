@@ -10,11 +10,29 @@ OPENVPN_SCRIPT_PATH = os.getenv("OPENVPN_SCRIPT_PATH", "/usr/local/bin/openvpn-i
 INDEX_FILE_PATH = os.getenv("INDEX_FILE_PATH", "/etc/openvpn/easy-rsa/pki/index.txt")
 STATUS_LOG_PATH = os.getenv("STATUS_LOG_PATH", "/var/log/openvpn/status.log")
 CLIENT_CONFIG_DIR = os.getenv("CLIENT_CONFIG_DIR", "/root")
+EASYRSA_DIR = "/etc/openvpn/easy-rsa"
+OPENVPN_DIR = "/etc/openvpn"
+IPP_FILE = f"{OPENVPN_DIR}/ipp.txt"
 
 # --- Funzioni di Basso Livello ---
 
-def _run_command(command):
-    """Esegue un comando di shell e restituisce output e codice di uscita."""
+def _run_command(command, input_str=None, env_vars=None):
+    """Esegue un comando di shell e restituisce output e codice di uscita.
+    Accetta un input_str opzionale per fornire input allo stdin del processo.
+    Accetta un dict env_vars opzionale per le variabili d'ambiente aggiuntive.
+    Se env_vars è None, usa le variabili di default per openvpn-install.sh.
+    Se env_vars è un dict vuoto, non aggiunge variabili d'ambiente.
+    """
+    if env_vars is None:
+        # Default env vars for openvpn-install.sh
+        effective_env = dict(os.environ, AUTO_INSTALL='y', APPROVE_INSTALL='y', PASS='1')
+    elif env_vars == {}:
+        # No extra env vars
+        effective_env = os.environ
+    else:
+        # Custom env vars
+        effective_env = dict(os.environ, **env_vars)
+
     try:
         result = subprocess.run(
             command,
@@ -22,7 +40,8 @@ def _run_command(command):
             capture_output=True,
             text=True,
             check=True,
-            env=dict(os.environ, AUTO_INSTALL='y', APPROVE_INSTALL='y', PASS='1')
+            input=input_str,
+            env=effective_env
         )
         return result.stdout.strip(), result.returncode
     except subprocess.CalledProcessError as e:
@@ -104,7 +123,7 @@ def create_client(client_name: str):
     Crea un nuovo client OpenVPN e restituisce il contenuto del file .ovpn.
     """
     command = f"CLIENT='{client_name}' {OPENVPN_SCRIPT_PATH}"
-    output, exit_code = _run_command(command)
+    output, exit_code = _run_command(command) # env_vars=None uses default AUTO_INSTALL etc.
 
     if exit_code != 0:
         return None, f"Errore durante la creazione del client: {output}"
@@ -130,49 +149,18 @@ def get_client_config(client_name: str):
 
 def revoke_client(client_name: str):
     """
-    Revoca un client OpenVPN esistente.
+    Revoca un client OpenVPN esistente usando lo script esterno sudo-enabled.
     """
-    # Lo script di angristan richiede di passare il numero del client da revocare.
-    # Prima otteniamo la lista dei client per trovare il numero corretto.
+    # Il percorso dello script esterno di revoca
+    revoke_script_path = "/opt/vpn-manager/scripts/revoke-client.sh"
     
-    clients_from_index = [c["name"] for c in get_all_clients_from_index()]
-    if client_name not in clients_from_index:
-        return False, f"Client '{client_name}' non trovato."
-
-    try:
-        # L'indice per lo script è 1-based
-        client_index = clients_from_index.index(client_name) + 1
-    except ValueError:
-        return False, f"Client '{client_name}' non trovato."
-
-    command = f"{OPENVPN_SCRIPT_PATH}"
-    # Simulate interactive input:
-    # 2 (for remove client)
-    # {client_index} (the client number)
-    # y (to confirm)
-    input_str = f"2\n{client_index}\ny\n"
+    # Eseguiamo lo script esterno. Lo script stesso gestirà i permessi di root.
+    command = f"{revoke_script_path} {client_name}"
     
-    try:
-        result = subprocess.run(
-            command,
-            shell=True,
-            capture_output=True,
-            text=True,
-            check=True,
-            input=input_str, # Pass input to stdin
-            env=dict(os.environ, AUTO_INSTALL='y', APPROVE_INSTALL='y', PASS='1') # Keep these, though they might not apply to revoke
-        )
-        output = result.stdout.strip()
-        exit_code = result.returncode
-    except subprocess.CalledProcessError as e:
-        output = e.stderr.strip()
-        exit_code = e.returncode
-
+    # Chiamiamo _run_command con env_vars={} per non passare AUTO_INSTALL, ecc.
+    output, exit_code = _run_command(command, env_vars={})
+    
     if exit_code != 0:
-        return False, f"Errore durante la revoca del client: {output}"
-    
-    # Check output for specific success message from openvpn-install.sh
-    if "Client removed!" not in output and "Certificate revoked" not in output:
-        return False, f"Revoca client non confermata dall'output dello script: {output}"
+        return False, f"Errore durante la revoca: {output}"
 
     return True, f"Client '{client_name}' revocato con successo."

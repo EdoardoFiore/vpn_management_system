@@ -38,6 +38,7 @@ log_info "Aggiunta del repository PPA per PHP 8.1..."
 apt-get install -y software-properties-common apt-transport-https
 add-apt-repository ppa:ondrej/php -y
 sleep 5 # Give apt some time to fully update after adding PPA
+apt-get update
 
 if ! apt-get install -y nginx python3-pip python3-venv php8.1-fpm php8.1-curl curl; then
   log_error "Installazione delle dipendenze di base fallita."
@@ -148,6 +149,12 @@ python3 -m venv /opt/vpn-manager-env
 # Assumiamo che lo script venga eseguito dalla root del repo scompattato
 log_info "Copia dei file del backend..."
 cp -r ../backend/* /opt/vpn-manager/backend/
+
+# Copia i file degli script e rendi revoke-client.sh eseguibile
+log_info "Copia dei file degli script..."
+mkdir -p /opt/vpn-manager/scripts
+cp -r ../scripts/* /opt/vpn-manager/scripts/
+chmod +x /opt/vpn-manager/scripts/revoke-client.sh
 
 # Installa le dipendenze
 log_info "Installazione delle dipendenze Python..."
