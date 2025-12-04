@@ -60,19 +60,37 @@ function api_request($endpoint, $method = 'GET', $data = null) {
     ];
 }
 
-function get_clients() {
-    return api_request('/clients');
+
+function get_instances() {
+    return api_request('/instances');
 }
 
-function create_client($client_name) {
-    return api_request('/clients', 'POST', ['client_name' => $client_name]);
+function create_instance($name, $port, $subnet, $protocol) {
+    return api_request('/instances', 'POST', [
+        'name' => $name,
+        'port' => (int)$port,
+        'subnet' => $subnet,
+        'protocol' => $protocol
+    ]);
 }
 
-function download_client_config($client_name) {
-    return api_request('/clients/' . urlencode($client_name) . '/download');
+function delete_instance($instance_id) {
+    return api_request('/instances/' . urlencode($instance_id), 'DELETE');
 }
 
-function revoke_client($client_name) {
-    return api_request('/clients/' . urlencode($client_name), 'DELETE');
+function get_clients($instance_id) {
+    return api_request('/instances/' . urlencode($instance_id) . '/clients');
+}
+
+function create_client($instance_id, $client_name) {
+    return api_request('/instances/' . urlencode($instance_id) . '/clients', 'POST', ['client_name' => $client_name]);
+}
+
+function download_client_config($instance_id, $client_name) {
+    return api_request('/instances/' . urlencode($instance_id) . '/clients/' . urlencode($client_name) . '/download');
+}
+
+function revoke_client($instance_id, $client_name) {
+    return api_request('/instances/' . urlencode($instance_id) . '/clients/' . urlencode($client_name), 'DELETE');
 }
 ?>

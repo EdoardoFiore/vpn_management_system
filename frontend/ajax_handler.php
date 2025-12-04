@@ -7,47 +7,83 @@ header('Content-Type: application/json');
 
 $action = $_GET['action'] ?? $_POST['action'] ?? '';
 
+
 switch ($action) {
+    case 'get_instances':
+        $response = get_instances();
+        echo json_encode($response);
+        break;
+
+    case 'create_instance':
+        $name = $_POST['name'] ?? '';
+        $port = $_POST['port'] ?? '';
+        $subnet = $_POST['subnet'] ?? '';
+        $protocol = $_POST['protocol'] ?? 'udp';
+        
+        if (empty($name) || empty($port) || empty($subnet)) {
+            echo json_encode(['success' => false, 'body' => ['detail' => 'Dati mancanti.']]);
+            exit;
+        }
+        $response = create_instance($name, $port, $subnet, $protocol);
+        echo json_encode($response);
+        break;
+
+    case 'delete_instance':
+        $instance_id = $_POST['instance_id'] ?? '';
+        if (empty($instance_id)) {
+            echo json_encode(['success' => false, 'body' => ['detail' => 'ID istanza mancante.']]);
+            exit;
+        }
+        $response = delete_instance($instance_id);
+        echo json_encode($response);
+        break;
+
     case 'get_clients':
-        $response = get_clients();
+        $instance_id = $_GET['instance_id'] ?? '';
+        if (empty($instance_id)) {
+            echo json_encode(['success' => false, 'body' => ['detail' => 'ID istanza mancante.']]);
+            exit;
+        }
+        $response = get_clients($instance_id);
         echo json_encode($response);
         break;
 
     case 'create_client':
+        $instance_id = $_POST['instance_id'] ?? '';
         $client_name = $_POST['client_name'] ?? '';
-        if (empty($client_name) || !preg_match('/^[a-zA-Z0-9_.-]+$/', $client_name)) {
-            echo json_encode(['success' => false, 'body' => ['detail' => 'Nome client non valido.']]);
+        if (empty($instance_id) || empty($client_name) || !preg_match('/^[a-zA-Z0-9_.-]+$/', $client_name)) {
+            echo json_encode(['success' => false, 'body' => ['detail' => 'Dati non validi.']]);
             exit;
         }
-        $response = create_client($client_name);
+        $response = create_client($instance_id, $client_name);
         echo json_encode($response);
         break;
 
     case 'download_client':
+        $instance_id = $_GET['instance_id'] ?? '';
         $client_name = $_GET['client_name'] ?? '';
-        if (empty($client_name) || !preg_match('/^[a-zA-Z0-9_.-]+$/', $client_name)) {
-            echo json_encode(['success' => false, 'body' => ['detail' => 'Nome client non valido.']]);
+        if (empty($instance_id) || empty($client_name) || !preg_match('/^[a-zA-Z0-9_.-]+$/', $client_name)) {
+            echo json_encode(['success' => false, 'body' => ['detail' => 'Dati non validi.']]);
             exit;
         }
-        $response = download_client_config($client_name);
+        $response = download_client_config($instance_id, $client_name);
         if ($response['success']) {
-            // Se è un successo, il body contiene il file .ovpn
             header('Content-Type: application/x-openvpn-profile');
             header('Content-Disposition: attachment; filename="' . $client_name . '.ovpn"');
             echo $response['body'];
         } else {
-            // Errore
-            echo json_encode($response); // Restituisce l'errore JSON
+            echo json_encode($response);
         }
         break;
 
     case 'revoke_client':
+        $instance_id = $_POST['instance_id'] ?? '';
         $client_name = $_POST['client_name'] ?? '';
-        if (empty($client_name) || !preg_match('/^[a-zA-Z0-9_.-]+$/', $client_name)) {
-            echo json_encode(['success' => false, 'body' => ['detail' => 'Nome client non valido.']]);
+        if (empty($instance_id) || empty($client_name) || !preg_match('/^[a-zA-Z0-9_.-]+$/', $client_name)) {
+            echo json_encode(['success' => false, 'body' => ['detail' => 'Dati non validi.']]);
             exit;
         }
-        $response = revoke_client($client_name);
+        $response = revoke_client($instance_id, $client_name);
         echo json_encode($response);
         break;
 
@@ -55,3 +91,4 @@ switch ($action) {
         echo json_encode(['success' => false, 'body' => ['detail' => 'Azione non riconosciuta.']]);
         break;
 }
+

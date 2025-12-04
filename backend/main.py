@@ -1,4 +1,6 @@
 import os
+import re
+from typing import List
 from fastapi import FastAPI, HTTPException, Security, Depends
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.security.api_key import APIKeyHeader
@@ -6,17 +8,23 @@ from fastapi.responses import PlainTextResponse
 from pydantic import BaseModel
 
 import vpn_manager
-import re
+import instance_manager
 
 # Regex per validare i nomi dei client (permette alfanumerici, underscore, trattini e punti)
 CLIENT_NAME_PATTERN = r"^[a-zA-Z0-9_.-]+$"
 
-# --- Modello per la richiesta di creazione client ---
+# --- Modelli Pydantic ---
 class ClientRequest(BaseModel):
     client_name: str
 
+class InstanceRequest(BaseModel):
+    name: str
+    port: int
+    subnet: str
+    protocol: str = "udp"
+
 # --- Sicurezza con API Key ---
-API_KEY = os.getenv("API_KEY", "change-this-in-production") # Cambiare questa chiave!
+API_KEY = os.getenv("API_KEY", "change-this-in-production")
 API_KEY_NAME = "X-API-Key"
 api_key_header = APIKeyHeader(name=API_KEY_NAME, auto_error=True)
 
@@ -32,14 +40,12 @@ async def get_api_key(key: str = Security(api_key_header)):
 # --- Applicazione FastAPI ---
 app = FastAPI(
     title="OpenVPN Management API",
-    description="API per gestire client OpenVPN.",
-    version="1.0.0",
+    description="API per gestire istanze multiple di OpenVPN.",
+    version="2.0.0",
 )
 
 # --- Middleware CORS ---
-# Permetti tutte le origini per semplicità. In produzione, dovresti limitarlo.
 origins = ["*"]
-
 app.add_middleware(
     CORSMiddleware,
     allow_origins=origins,
@@ -48,48 +54,79 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# --- Endpoint dell'API ---
+# --- Endpoints Istanze ---
 
-@app.get("/api/clients", dependencies=[Depends(get_api_key)])
-async def get_clients():
-    """
-    Ottiene la lista di tutti i client configurati e il loro stato (connesso/disconnesso).
-    """
+@app.get("/api/instances", dependencies=[Depends(get_api_key)])
+async def get_instances():
+    """Restituisce la lista di tutte le istanze OpenVPN."""
+    return instance_manager.get_all_instances()
+
+@app.post("/api/instances", dependencies=[Depends(get_api_key)])
+async def create_instance(request: InstanceRequest):
+    """Crea una nuova istanza OpenVPN."""
     try:
-        clients = vpn_manager.list_clients()
-        return clients
+        instance = instance_manager.create_instance(
+            name=request.name,
+            port=request.port,
+            subnet=request.subnet,
+            protocol=request.protocol
+        )
+        return instance
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
-@app.post("/api/clients", dependencies=[Depends(get_api_key)])
-async def create_new_client(request: ClientRequest):
-    """
-    Crea un nuovo client OpenVPN.
-    Restituisce il file di configurazione .ovpn come testo.
-    """
+@app.delete("/api/instances/{instance_id}", dependencies=[Depends(get_api_key)])
+async def delete_instance(instance_id: str):
+    """Elimina un'istanza OpenVPN."""
+    try:
+        instance_manager.delete_instance(instance_id)
+        return {"message": "Instance deleted"}
+    except ValueError:
+        raise HTTPException(status_code=404, detail="Instance not found")
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+# --- Endpoints Client (Scoped per Istanza) ---
+
+@app.get("/api/instances/{instance_id}/clients", dependencies=[Depends(get_api_key)])
+async def get_clients(instance_id: str):
+    """Ottiene la lista dei client per una specifica istanza."""
+    try:
+        clients = vpn_manager.list_clients(instance_id)
+        return clients
+    except ValueError:
+        raise HTTPException(status_code=404, detail="Instance not found")
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.post("/api/instances/{instance_id}/clients", dependencies=[Depends(get_api_key)])
+async def create_client(instance_id: str, request: ClientRequest):
+    """Crea un nuovo client per una specifica istanza."""
     client_name = request.client_name
     if not client_name or not re.fullmatch(CLIENT_NAME_PATTERN, client_name):
-        raise HTTPException(status_code=400, detail="Il nome del client non è valido. Usare solo caratteri alfanumerici.")
+        raise HTTPException(status_code=400, detail="Nome client non valido.")
 
-    config_content, error = vpn_manager.create_client(client_name)
-
-    if error:
+    success, error = vpn_manager.create_client(instance_id, client_name)
+    if not success:
         raise HTTPException(status_code=500, detail=error)
 
-    return {"message": f"Client '{client_name}' creato con successo. Puoi scaricare il file .ovpn usando l'endpoint di download."}
+    return {"message": f"Client '{client_name}' creato con successo."}
 
-@app.get("/api/clients/{client_name}/download", dependencies=[Depends(get_api_key)])
-async def download_client_config(client_name: str):
-    """
-    Scarica il file di configurazione .ovpn per un client esistente.
-    """
+@app.get("/api/instances/{instance_id}/clients/{client_name}/download", dependencies=[Depends(get_api_key)])
+async def download_client_config(instance_id: str, client_name: str):
+    """Scarica il file .ovpn per un client."""
+    # Verifica esistenza istanza (opzionale, ma buona pratica)
+    if not instance_manager.get_instance(instance_id):
+        raise HTTPException(status_code=404, detail="Instance not found")
+
     if not client_name or not re.fullmatch(CLIENT_NAME_PATTERN, client_name):
-        raise HTTPException(status_code=400, detail="Il nome del client non è valido.")
+        raise HTTPException(status_code=400, detail="Nome client non valido.")
     
     config_content, error = vpn_manager.get_client_config(client_name)
-
     if error:
-        raise HTTPException(status_code=404, detail=error) # 404 if file not found
+        raise HTTPException(status_code=404, detail=error)
 
     return PlainTextResponse(
         content=config_content,
@@ -97,16 +134,13 @@ async def download_client_config(client_name: str):
         headers={"Content-Disposition": f"attachment; filename={client_name}.ovpn"}
     )
 
-@app.delete("/api/clients/{client_name}", dependencies=[Depends(get_api_key)])
-async def revoke_existing_client(client_name: str):
-    """
-    Revoca un client OpenVPN esistente.
-    """
+@app.delete("/api/instances/{instance_id}/clients/{client_name}", dependencies=[Depends(get_api_key)])
+async def revoke_client(instance_id: str, client_name: str):
+    """Revoca un client."""
     if not client_name or not re.fullmatch(CLIENT_NAME_PATTERN, client_name):
-        raise HTTPException(status_code=400, detail="Il nome del client non è valido.")
+        raise HTTPException(status_code=400, detail="Nome client non valido.")
 
-    success, message = vpn_manager.revoke_client(client_name)
-
+    success, message = vpn_manager.revoke_client(instance_id, client_name)
     if not success:
         raise HTTPException(status_code=500, detail=message)
 
@@ -114,5 +148,6 @@ async def revoke_existing_client(client_name: str):
 
 @app.get("/")
 async def root():
-    return {"message": "OpenVPN Management API is running."}
+    return {"message": "OpenVPN Management API v2 is running."}
+
 
