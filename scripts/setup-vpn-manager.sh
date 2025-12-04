@@ -20,6 +20,52 @@ log_error() {
   echo -e "\033[31m[ERROR]\033[0m $1" >&2
 }
 
+# Funzione per cercare un file in una lista di percorsi, con fallback find
+find_file_in_paths() {
+  local filename="$1"
+  shift
+  local paths=("$@")
+  local found_path=""
+
+  # Cerca nei percorsi predefiniti
+  for p in "${paths[@]}"; do
+    if [[ -f "$p" ]]; then
+      found_path="$p"
+      break
+    fi
+  done
+
+  # Se non trovato, prova con find
+  if [[ -z "$found_path" ]]; then
+    log_info "File '$filename' non trovato nei percorsi standard. Tentativo di ricerca dinamica..."
+    found_path=$(find / -xdev -type f -name "$filename" 2>/dev/null | head -n 1)
+  fi
+  echo "$found_path"
+}
+
+# Funzione per cercare una directory in una lista di percorsi, con fallback find
+find_dir_in_paths() {
+  local dirname="$1"
+  shift
+  local paths=("$@")
+  local found_path=""
+
+  # Cerca nei percorsi predefiniti
+  for p in "${paths[@]}"; do
+    if [[ -d "$p" ]]; then
+      found_path="$p"
+      break
+    fi
+  done
+
+  # Se non trovato, prova con find
+  if [[ -z "$found_path" ]]; then
+    log_info "Directory '$dirname' non trovata nei percorsi standard. Tentativo di ricerca dinamica..."
+    found_path=$(find / -xdev -type d -name "$dirname" 2>/dev/null | head -n 1)
+  fi
+  echo "$found_path"
+}
+
 # --- Controllo Esecuzione come Root ---
 if [[ $EUID -ne 0 ]]; then
   log_error "Questo script deve essere eseguito come root. Usa 'sudo bash setup-vpn-manager.sh'"
@@ -169,17 +215,67 @@ log_info "Impostazione del servizio di systemd per il backend..."
 cp /opt/vpn-manager/backend/vpn-manager.service /etc/systemd/system/
 
 # Genera una API key sicura e la inserisce nel file .env
-API_KEY_GENERATED=$(cat /proc/sys/kernel/random/uuid) # Use a new variable name for clarity
+API_KEY_GENERATED=$(cat /proc/sys/kernel/random/uuid)
 ENV_FILE="/opt/vpn-manager/backend/.env"
 
+# --- Ricerca dinamica dei percorsi ---
+log_info "Ricerca dinamica dei percorsi critici di OpenVPN e Easy-RSA..."
+
+# OPENVPN_DIR: Cercare /etc/openvpn o dove si trova server.conf
+OPENVPN_DIR=$(find_dir_in_paths "openvpn" "/etc/openvpn" "/usr/local/etc/openvpn")
+if [[ -z "$OPENVPN_DIR" ]]; then
+    log_error "Impossibile trovare la directory di configurazione OpenVPN. Si prega di installare OpenVPN o specificare manualmente il percorso."
+fi
+log_info "OpenVPN directory trovata: $OPENVPN_DIR"
+
+# EASYRSA_DIR: Cercare easy-rsa
+EASYRSA_DIR=$(find_dir_in_paths "easy-rsa" "/etc/openvpn/easy-rsa" "/usr/share/easy-rsa" "/usr/local/share/easy-rsa" "$OPENVPN_DIR/easy-rsa")
+if [[ -z "$EASYRSA_DIR" ]]; then
+    log_error "Impossibile trovare la directory Easy-RSA. Si prega di installare Easy-RSA o specificare manualmente il percorso."
+fi
+log_info "Easy-RSA directory trovata: $EASYRSA_DIR"
+
+# OPENVPN_SCRIPT_PATH: Dove abbiamo spostato lo script di installazione
+OPENVPN_SCRIPT_PATH="/usr/local/bin/openvpn-install.sh"
+if [[ ! -f "$OPENVPN_SCRIPT_PATH" ]]; then
+    log_error "Script openvpn-install.sh non trovato in $OPENVPN_SCRIPT_PATH. Assicurarsi che la Fase 2 sia stata eseguita correttamente."
+fi
+log_info "openvpn-install.sh path: $OPENVPN_SCRIPT_PATH"
+
+# INDEX_FILE_PATH: Derivato da EASYRSA_DIR
+INDEX_FILE_PATH="$EASYRSA_DIR/pki/index.txt"
+if [[ ! -f "$INDEX_FILE_PATH" ]]; then
+    log_error "File index.txt di Easy-RSA non trovato in $INDEX_FILE_PATH. Assicurarsi che Easy-RSA sia configurato correttamente."
+fi
+log_info "index.txt path: $INDEX_FILE_PATH"
+
+# STATUS_LOG_PATH: Cercare un file status.log (potrebbe variare) o usare default
+STATUS_LOG_PATH=$(find_file_in_paths "status.log" "/var/log/openvpn/status.log" "$OPENVPN_DIR/log/status.log")
+# Se non trova il log, usa un default comune (potrebbe essere necessario aggiustare)
+if [[ -z "$STATUS_LOG_PATH" ]]; then
+    log_info "File status.log di OpenVPN non trovato. Utilizzo del default: /var/log/openvpn/status.log"
+    STATUS_LOG_PATH="/var/log/openvpn/status.log"
+fi
+log_info "status.log path: $STATUS_LOG_PATH"
+
+# CLIENT_CONFIG_DIR: Nostra decisione, rimane /root
+CLIENT_CONFIG_DIR="/root"
+log_info "Client config directory: $CLIENT_CONFIG_DIR"
+
+# IPP_FILE: Derivato da OPENVPN_DIR
+IPP_FILE="$OPENVPN_DIR/ipp.txt"
+# Non è un errore critico se ipp.txt non esiste subito, verrà creato da OpenVPN
+log_info "IPP file path: $IPP_FILE"
+
+# --- Scrittura nel file .env ---
 echo "API_KEY=$API_KEY_GENERATED" > "$ENV_FILE"
-echo "OPENVPN_SCRIPT_PATH=/usr/local/bin/openvpn-install.sh" >> "$ENV_FILE"
-echo "INDEX_FILE_PATH=/etc/openvpn/easy-rsa/pki/index.txt" >> "$ENV_FILE"
-echo "STATUS_LOG_PATH=/var/log/openvpn/status.log" >> "$ENV_FILE"
-echo "CLIENT_CONFIG_DIR=/root" >> "$ENV_FILE"
-echo "EASYRSA_DIR=/etc/openvpn/easy-rsa" >> "$ENV_FILE"
-echo "OPENVPN_DIR=/etc/openvpn" >> "$ENV_FILE"
-echo "IPP_FILE=/etc/openvpn/ipp.txt" >> "$ENV_FILE"
+echo "OPENVPN_SCRIPT_PATH=$OPENVPN_SCRIPT_PATH" >> "$ENV_FILE"
+echo "INDEX_FILE_PATH=$INDEX_FILE_PATH" >> "$ENV_FILE"
+echo "STATUS_LOG_PATH=$STATUS_LOG_PATH" >> "$ENV_FILE"
+echo "CLIENT_CONFIG_DIR=$CLIENT_CONFIG_DIR" >> "$ENV_FILE"
+echo "EASYRSA_DIR=$EASYRSA_DIR" >> "$ENV_FILE"
+echo "OPENVPN_DIR=$OPENVPN_DIR" >> "$ENV_FILE"
+echo "IPP_FILE=$IPP_FILE" >> "$ENV_FILE"
 
 log_info "API Key e variabili di configurazione generate e configurate nel .env del backend."
 
