@@ -128,13 +128,19 @@ def create_client(client_name: str):
     if client_name in existing_client_names:
         return False, f"Un client con il nome '{client_name}' esiste già."
 
-    command = f"CLIENT='{client_name}' {OPENVPN_SCRIPT_PATH}"
-    output, exit_code = _run_command(command) # env_vars=None uses default AUTO_INSTALL etc.
+    # Il percorso dello script esterno di creazione client
+    create_script_path = "/opt/vpn-manager/scripts/create-client.sh"
+    
+    # Eseguiamo lo script esterno.
+    command = f"{create_script_path} {client_name}"
+    
+    # Chiamiamo _run_command con env_vars={} per non passare AUTO_INSTALL, ecc.
+    output, exit_code = _run_command(command, env_vars={})
 
     if exit_code != 0:
-        return None, f"Errore durante la creazione del client: {output}"
+        return False, f"Errore durante la creazione del client: {output}"
 
-    # Lo script crea il file in CLIENT_CONFIG_DIR
+    # Il nostro script crea il file in CLIENT_CONFIG_DIR
     config_path = os.path.join(CLIENT_CONFIG_DIR, f"{client_name}.ovpn")
     if os.path.exists(config_path):
         return True, None # Indicate success, no content returned here

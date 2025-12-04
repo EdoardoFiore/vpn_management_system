@@ -68,16 +68,14 @@ chmod +x openvpn-install.sh
 
 # Esegue lo script in modalità non interattiva
 # NOTA: questo crea un primo utente chiamato 'test-client'
-log_info "Esecuzione dello script di installazione di OpenVPN in modalità non interattiva..."
+log_info "Esecuzione dello script di installazione di OpenVPN PER IL SERVER in modalità non interattiva..."
 AUTO_INSTALL=y \
   ENDPOINT="$PUBLIC_IP" \
   APPROVE_INSTALL=y \
   APPROVE_IP=y \
   PORT_CHOICE=1      # Default: 1194
 PROTOCOL_CHOICE=1    # Default: UDP
-COMPRESSION_CHOICE=2 # Default: No
-CLIENT="test-client" \
-  PASS=1 \
+COMPRESSION_CHOICE=2 \
   ./openvpn-install.sh
 
 if [[ ! -f /etc/openvpn/server.conf ]]; then
@@ -85,7 +83,17 @@ if [[ ! -f /etc/openvpn/server.conf ]]; then
   exit 1
 fi
 
-log_success "OpenVPN installato e configurato con successo. Un primo client 'test-client.ovpn' è stato creato in /root/."
+log_success "OpenVPN installato e configurato con successo."
+
+# Ora crea il client di test usando il nostro script
+log_info "Creazione del client di test 'test-client'..."
+/opt/vpn-manager/scripts/create-client.sh "test-client"
+if [[ $? -ne 0 ]]; then
+  log_error "Creazione del client 'test-client' fallita."
+  exit 1
+fi
+
+log_success "Un primo client 'test-client.ovpn' è stato creato in /root/."
 
 # --- Configurazione opzionale per Split-Tunneling ---
 declare -a split_tunnel_routes=()
@@ -149,11 +157,12 @@ python3 -m venv /opt/vpn-manager-env
 log_info "Copia dei file del backend..."
 cp -r ../backend/* /opt/vpn-manager/backend/
 
-# Copia i file degli script e rendi revoke-client.sh eseguibile
+# Copia i file degli script e rendi revoke-client.sh ed create-client.sh eseguibili
 log_info "Copia dei file degli script..."
 mkdir -p /opt/vpn-manager/scripts
 cp -r ../scripts/* /opt/vpn-manager/scripts/
 chmod +x /opt/vpn-manager/scripts/revoke-client.sh
+chmod +x /opt/vpn-manager/scripts/create-client.sh
 
 # Installa le dipendenze
 log_info "Installazione delle dipendenze Python..."
