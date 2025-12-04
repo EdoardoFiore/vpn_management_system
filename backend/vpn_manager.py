@@ -7,7 +7,7 @@ load_dotenv()
 
 # --- Percorsi e Costanti (Configurabili tramite .env) ---
 OPENVPN_SCRIPT_PATH = os.getenv("OPENVPN_SCRIPT_PATH", "/usr/local/bin/openvpn-install.sh")
-INDEX_FILE_PATH = os.getenv("INDEX_FILE_PATH", "/etc/openvpn/server/easy-rsa/pki/index.txt")
+INDEX_FILE_PATH = os.getenv("INDEX_FILE_PATH", "/etc/openvpn/easy-rsa/pki/index.txt")
 STATUS_LOG_PATH = os.getenv("STATUS_LOG_PATH", "/var/log/openvpn/status.log")
 CLIENT_CONFIG_DIR = os.getenv("CLIENT_CONFIG_DIR", "/root")
 
@@ -112,9 +112,9 @@ def create_client(client_name: str):
     # Lo script crea il file in CLIENT_CONFIG_DIR
     config_path = os.path.join(CLIENT_CONFIG_DIR, f"{client_name}.ovpn")
     if os.path.exists(config_path):
-        return config_content, None
+        return True, None # Indicate success, no content returned here
     else:
-        return None, f"File di configurazione .ovpn non trovato in {CLIENT_CONFIG_DIR} dopo la creazione."
+        return False, f"File di configurazione .ovpn non trovato in {CLIENT_CONFIG_DIR} dopo la creazione."
 
 def get_client_config(client_name: str):
     """
