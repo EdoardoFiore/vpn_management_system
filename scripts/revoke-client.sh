@@ -53,7 +53,7 @@ if [ -f "$IPP_FILE" ]; then
 fi
 
 # 6. Riavvia il servizio OpenVPN per applicare la nuova CRL
-if ! systemctl restart openvpn-server@server.service; then
+if ! systemctl restart openvpn.service; then
     log_error "Errore durante il riavvio del servizio OpenVPN."
 fi
 

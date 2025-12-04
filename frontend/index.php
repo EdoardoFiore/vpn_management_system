@@ -243,8 +243,8 @@
                 showNotification('danger', 'Il nome del client non può essere vuoto.');
                 return;
             }
-            // Basic client name validation
-            if (!/^[a-zA-Z0-9_-]+$/.test(clientName)) {
+            // Basic client name validation (alphanumeric, underscore, hyphen, period)
+            if (!/^[a-zA-Z0-9_.-]+$/.test(clientName)) {
                 showNotification('danger', 'Nome client non valido. Usare solo lettere, numeri, trattini e underscore.');
                 return;
             }
@@ -309,7 +309,7 @@
         }
 
         async function revokeClient(clientName) {
-            if (!confirm(`Sei sicuro di voler revocare il client '${clientName}'?`)) {
+            if (!confirm(`Sei sicuro di voler revocare il client '${clientName}'? Questa operazione è IRREVERSIBILE!`)) {
                 return;
             }
 

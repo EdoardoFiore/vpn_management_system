@@ -37,7 +37,6 @@ apt-get update && apt-get upgrade -y
 log_info "Aggiunta del repository PPA per PHP 8.1..."
 apt-get install -y software-properties-common apt-transport-https
 add-apt-repository ppa:ondrej/php -y
-sleep 5 # Give apt some time to fully update after adding PPA
 apt-get update
 
 if ! apt-get install -y nginx python3-pip python3-venv php8.1-fpm php8.1-curl curl; then

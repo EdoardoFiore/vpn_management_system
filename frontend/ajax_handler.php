@@ -15,7 +15,7 @@ switch ($action) {
 
     case 'create_client':
         $client_name = $_POST['client_name'] ?? '';
-        if (empty($client_name) || !preg_match('/^[a-zA-Z0-9_-]+$/', $client_name)) {
+        if (empty($client_name) || !preg_match('/^[a-zA-Z0-9_.-]+$/', $client_name)) {
             echo json_encode(['success' => false, 'body' => ['detail' => 'Nome client non valido.']]);
             exit;
         }
@@ -25,7 +25,7 @@ switch ($action) {
 
     case 'download_client':
         $client_name = $_GET['client_name'] ?? '';
-        if (empty($client_name) || !preg_match('/^[a-zA-Z0-9_-]+$/', $client_name)) {
+        if (empty($client_name) || !preg_match('/^[a-zA-Z0-9_.-]+$/', $client_name)) {
             echo json_encode(['success' => false, 'body' => ['detail' => 'Nome client non valido.']]);
             exit;
         }
@@ -43,7 +43,7 @@ switch ($action) {
 
     case 'revoke_client':
         $client_name = $_POST['client_name'] ?? '';
-        if (empty($client_name) || !preg_match('/^[a-zA-Z0-9_-]+$/', $client_name)) {
+        if (empty($client_name) || !preg_match('/^[a-zA-Z0-9_.-]+$/', $client_name)) {
             echo json_encode(['success' => false, 'body' => ['detail' => 'Nome client non valido.']]);
             exit;
         }

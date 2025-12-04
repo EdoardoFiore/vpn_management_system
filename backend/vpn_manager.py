@@ -120,8 +120,14 @@ def list_clients():
 
 def create_client(client_name: str):
     """
-    Crea un nuovo client OpenVPN e restituisce il contenuto del file .ovpn.
+    Crea un nuovo client OpenVPN. Verifica se il client esiste già.
     """
+    # Prima di creare, controlla se un client con questo nome esiste già
+    existing_clients = get_all_clients_from_index()
+    existing_client_names = [client["name"] for client in existing_clients]
+    if client_name in existing_client_names:
+        return False, f"Un client con il nome '{client_name}' esiste già."
+
     command = f"CLIENT='{client_name}' {OPENVPN_SCRIPT_PATH}"
     output, exit_code = _run_command(command) # env_vars=None uses default AUTO_INSTALL etc.
 

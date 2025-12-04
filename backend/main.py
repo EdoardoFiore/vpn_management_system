@@ -6,6 +6,10 @@ from fastapi.responses import PlainTextResponse
 from pydantic import BaseModel
 
 import vpn_manager
+import re
+
+# Regex per validare i nomi dei client (permette alfanumerici, underscore, trattini e punti)
+CLIENT_NAME_PATTERN = r"^[a-zA-Z0-9_.-]+$"
 
 # --- Modello per la richiesta di creazione client ---
 class ClientRequest(BaseModel):
@@ -64,7 +68,7 @@ async def create_new_client(request: ClientRequest):
     Restituisce il file di configurazione .ovpn come testo.
     """
     client_name = request.client_name
-    if not client_name or not client_name.isalnum():
+    if not client_name or not re.fullmatch(CLIENT_NAME_PATTERN, client_name):
         raise HTTPException(status_code=400, detail="Il nome del client non è valido. Usare solo caratteri alfanumerici.")
 
     config_content, error = vpn_manager.create_client(client_name)
@@ -79,7 +83,7 @@ async def download_client_config(client_name: str):
     """
     Scarica il file di configurazione .ovpn per un client esistente.
     """
-    if not client_name or not client_name.isalnum():
+    if not client_name or not re.fullmatch(CLIENT_NAME_PATTERN, client_name):
         raise HTTPException(status_code=400, detail="Il nome del client non è valido.")
     
     config_content, error = vpn_manager.get_client_config(client_name)
@@ -98,7 +102,7 @@ async def revoke_existing_client(client_name: str):
     """
     Revoca un client OpenVPN esistente.
     """
-    if not client_name or not client_name.isalnum():
+    if not client_name or not re.fullmatch(CLIENT_NAME_PATTERN, client_name):
         raise HTTPException(status_code=400, detail="Il nome del client non è valido.")
 
     success, message = vpn_manager.revoke_client(client_name)
