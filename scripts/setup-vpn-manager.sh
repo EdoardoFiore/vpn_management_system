@@ -85,7 +85,7 @@ apt-get install -y software-properties-common apt-transport-https
 add-apt-repository ppa:ondrej/php -y
 apt-get update
 
-if ! apt-get install -y nginx python3-pip python3-venv php8.1-fpm php8.1-curl curl; then
+if ! apt-get install -y nginx python3-pip python3-venv php8.1-fpm php8.1-curl curl apache2-utils; then
   log_error "Installazione delle dipendenze di base fallita."
   exit 1
 fi
@@ -352,6 +352,37 @@ if [[ $? -ne 0 ]]; then
 fi
 
 log_success "Nginx configurato e riavviato con successo."
+
+# --- Configurazione Nginx Basic Auth ---
+log_info "Fase 5/5: Configurazione Nginx Basic Auth..."
+
+HTPASSWD_FILE="/etc/nginx/.htpasswd"
+read -rp "Inserisci il nome utente per accedere alla dashboard web: " NGINX_USER
+
+until [[ -n "$NGINX_USER" ]]; do
+    log_error "Il nome utente non può essere vuoto."
+    read -rp "Inserisci il nome utente per accedere alla dashboard web: " NGINX_USER
+done
+
+# La password verrà richiesta da htpasswd stesso
+htpasswd -Bc "$HTPASSWD_FILE" "$NGINX_USER"
+
+if [[ $? -ne 0 ]]; then
+    log_error "Creazione utente Nginx Basic Auth fallita."
+    exit 1
+fi
+chmod 644 "$HTPASSWD_FILE" # Assicurati che Nginx possa leggere il file
+
+log_success "Utente Nginx Basic Auth '$NGINX_USER' creato con successo."
+
+# Riavvia Nginx per applicare le modifiche all'autenticazione (htpasswd e nginx.conf)
+log_info "Riavvio di Nginx per applicare le modifiche all'autenticazione..."
+systemctl restart nginx
+if [[ $? -ne 0 ]]; then
+    log_error "Riavvio del servizio Nginx fallito dopo la configurazione auth."
+    exit 1
+fi
+log_success "Nginx riavviato con successo per la configurazione Basic Auth."
 
 log_success "Installazione completata!"
 echo "--------------------------------------------------"
