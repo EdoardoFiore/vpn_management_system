@@ -14,7 +14,7 @@ def get_network_interfaces() -> List[Dict[str, str]]:
     try:
         # Use 'ip addr show' to get interface information
         result = subprocess.run(
-            ["ip", "-o", "addr", "show"],
+            ["/usr/sbin/ip", "-o", "addr", "show"],
             capture_output=True,
             text=True,
             check=True

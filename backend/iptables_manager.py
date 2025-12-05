@@ -7,7 +7,7 @@ def _get_default_interface():
     """Detects the default network interface."""
     try:
         # ip route | grep default
-        result = subprocess.run(["ip", "route"], capture_output=True, text=True, check=True)
+        result = subprocess.run(["/usr/sbin/ip", "route"], capture_output=True, text=True, check=True)
         for line in result.stdout.splitlines():
             if "default" in line:
                 parts = line.split()
@@ -21,7 +21,7 @@ DEFAULT_INTERFACE = _get_default_interface()
 
 def _run_iptables(args):
     """Run an iptables command."""
-    command = f"iptables {args}"
+    command = f"/usr/sbin/iptables {args}"
     try:
         subprocess.run(command, shell=True, check=True, capture_output=True, text=True)
         return True, None

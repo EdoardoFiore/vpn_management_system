@@ -137,7 +137,7 @@ def _get_service_name(instance: Instance) -> str:
 def _is_service_active(instance: Instance) -> bool:
     service_name = _get_service_name(instance)
     try:
-        subprocess.run(["systemctl", "is-active", "--quiet", service_name], check=True)
+        subprocess.run(["/usr/bin/systemctl", "is-active", "--quiet", service_name], check=True)
         return True
     except subprocess.CalledProcessError:
         return False
@@ -188,8 +188,8 @@ def create_instance(name: str, port: int, subnet: str, protocol: str = "udp",
     # Enable and Start Service
     service_name = _get_service_name(new_instance)
     try:
-        subprocess.run(["systemctl", "enable", service_name], check=True)
-        subprocess.run(["systemctl", "start", service_name], check=True)
+        subprocess.run(["/usr/bin/systemctl", "enable", service_name], check=True)
+        subprocess.run(["/usr/bin/systemctl", "start", service_name], check=True)
         new_instance.status = "running"
     except subprocess.CalledProcessError as e:
         # Clean up if start fails
@@ -225,8 +225,8 @@ def delete_instance(instance_id: str):
 
     # Stop Service
     service_name = _get_service_name(inst)
-    subprocess.run(["systemctl", "stop", service_name], check=False)
-    subprocess.run(["systemctl", "disable", service_name], check=False)
+    subprocess.run(["/usr/bin/systemctl", "stop", service_name], check=False)
+    subprocess.run(["/usr/bin/systemctl", "disable", service_name], check=False)
 
     # Remove iptables
     iptables_manager.remove_openvpn_rules(inst.port, inst.protocol, inst.tun_interface, inst.subnet)
