@@ -274,12 +274,163 @@ def _generate_openvpn_config(instance: Instance):
     """
     logger.info(f"Generating config for instance '{instance.name}'")
     
-    ca_path = os.getenv("CA_PATH", "/etc/openvpn/easy-rsa/pki/ca.crt")
-    cert_path = os.getenv("CERT_PATH", "/etc/openvpn/easy-rsa/pki/issued/server.crt")
-    key_path = os.getenv("KEY_PATH", "/etc/openvpn/easy-rsa/pki/private/server.key")
-    dh_path = os.getenv("DH_PATH", "/etc/openvpn/easy-rsa/pki/dh.pem")
-    crl_path = os.getenv("CRL_PATH", "/etc/openvpn/easy-rsa/pki/crl.pem")
-    tls_crypt_path = os.getenv("TLS_CRYPT_PATH", "/etc/openvpn/tls-crypt.key")
+    # Use relative paths like the default server.conf
+    # Files are in /etc/openvpn/ directly
+    ca_path = "ca.crt"
+    
+    # Find the actual server cert/key names (they have random names from Angristan script)
+    server_cert = None
+    server_key = None
+    try:
+        for f in os.listdir("/etc/openvpn"):
+            if f.startswith("server_") and f.endswith(".crt"):
+                server_cert = f
+            if f.startswith("server_") and f.endswith(".key"):
+                server_key = f
+        
+        if not server_cert or not server_key:
+            logger.warning("Server cert/key not found with server_ prefix, using generic names")
+            server_cert = "server.crt"
+            server_key = "server.key"
+    except Exception as e:
+        logger.warning(f"Error finding server cert/key: {e}")
+        server_cert = "server.crt"
+        server_key = "server.key"
+    
+    cert_path = server_cert
+    key_path = server_key
+    crl_path = "crl.pem"
+    tls_crypt_path = "tls-crypt.key"
+    
+    logger.info(f"Using certificates: ca={ca_path}, cert={cert_path}, key={key_path}")
+    
+    # Handle subnet mask
+    network = instance.subnet.split('/')[0]
+    cidr = instance.subnet.split('/')[1] if '/' in instance.subnet else '24'
+    
+    # Simple CIDR to Netmask conversion
+    netmask = "255.255.255.0"
+    if cidr == '8': netmask = "255.0.0.0"
+    elif cidr == '16': netmask = "255.255.0.0"
+    elif cidr == '24': netmask = "255.255.255.0"
+    
+    # Ensure log directory exists
+    log_dir = "/var/log/openvpn"
+    os.makedirs(log_dir, exist_ok=True)
+    
+    # Ensure client-config-dir exists
+    ccd_dir = f"/etc/openvpn/ccd/{instance.name}"
+    os.makedirs(ccd_dir, exist_ok=True)
+    
+    # Base config (matching Angristan style)
+    config_lines = [
+        f"port {instance.port}",
+        f"proto {instance.protocol}",
+        f"dev {instance.tun_interface}",
+        f"ca {ca_path}",
+        f"cert {cert_path}",
+        f"key {key_path}",
+        "dh none",  # Use ECDH like Angristan
+        "ecdh-curve prime256v1",
+        "topology subnet",
+        f"server {network} {netmask}",
+        f"ifconfig-pool-persist ipp_{instance.name}.txt",
+        "",
+        "# Security",
+        "user nobody",
+        "group nogroup",
+        "persist-key",
+        "persist-tun",
+        "",
+        "# Keepalive and timeouts",
+        "keepalive 10 120",
+        "",
+        "# Cryptography",
+        "cipher AES-128-GCM",  # Match Angristan default
+        "auth SHA256",
+        "ncp-ciphers AES-128-GCM",
+        "tls-server",
+        "tls-version-min 1.2",
+        "tls-cipher TLS-ECDHE-ECDSA-WITH-AES-128-GCM-SHA256",
+    ]
+    
+    # Add tls-crypt if available
+    if os.path.exists(f"/etc/openvpn/{tls_crypt_path}"):
+        config_lines.append(f"tls-crypt {tls_crypt_path}")
+    
+    # Client configuration directory
+    config_lines.extend([
+        "",
+        "# Client-specific configurations",
+        f"client-config-dir {ccd_dir}",
+    ])
+    
+    # Add routing based on tunnel mode
+    config_lines.append("")
+    config_lines.append("# Routing configuration")
+    
+    if instance.tunnel_mode == "full":
+        config_lines.append('push "redirect-gateway def1 bypass-dhcp"')
+        config_lines.append('push "dhcp-option DNS 8.8.8.8"')
+        config_lines.append('push "dhcp-option DNS 8.8.4.4"')
+    elif instance.tunnel_mode == "split":
+        # Add custom routes
+        for route in instance.routes:
+            route_network = route.get('network', '')
+            if route_network:
+                # Convert CIDR to network + netmask for push route command
+                if '/' in route_network:
+                    net_parts = route_network.split('/')
+                    route_net = net_parts[0]
+                    route_cidr = net_parts[1]
+                    # Convert CIDR to netmask
+                    route_mask = "255.255.255.0"
+                    if route_cidr == '8': route_mask = "255.0.0.0"
+                    elif route_cidr == '16': route_mask = "255.255.0.0"
+                    elif route_cidr == '24': route_mask = "255.255.255.0"
+                    config_lines.append(f'push "route {route_net} {route_mask}"')
+                else:
+                    config_lines.append(f'push "route {route_network} 255.255.255.0"')
+    
+    # Logging and monitoring
+    config_lines.extend([
+        "",
+        "# Logging",
+        f"status {log_dir}/status_{instance.name}.log",
+        "verb 3",
+    ])
+    
+    # Certificate revocation list
+    config_lines.extend([
+        "",
+        "# Certificate revocation",
+        f"crl-verify {crl_path}",
+    ])
+    
+    config_content = "\n".join(config_lines) + "\n"
+    
+    # Ensure directory exists
+    os.makedirs(OPENVPN_CONFIG_DIR, exist_ok=True)
+    
+    config_path = os.path.join(OPENVPN_CONFIG_DIR, f"server_{instance.name}.conf")
+    logger.info(f"Writing config to: {config_path}")
+    
+    try:
+        with open(config_path, "w") as f:
+            f.write(config_content)
+        logger.info(f"Config file created successfully: {config_path}")
+        # Set proper permissions
+        os.chmod(config_path, 0o644)
+        
+        # Ensure CRL has correct permissions (using absolute path)
+        crl_absolute = f"/etc/openvpn/{crl_path}"
+        if os.path.exists(crl_absolute):
+            os.chmod(crl_absolute, 0o644)
+            logger.info(f"Set CRL permissions: {crl_absolute}")
+            
+    except Exception as e:
+        logger.error(f"Failed to write config file {config_path}: {e}")
+        raise
     
     # Handle subnet mask
     network = instance.subnet.split('/')[0]
