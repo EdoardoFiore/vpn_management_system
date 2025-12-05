@@ -272,6 +272,8 @@ def delete_instance(instance_id: str):
     _save_iptables_rules()
 
     # Remove Config
+    config_path = os.path.join(OPENVPN_CONFIG_DIR, f"server_{inst.name}.conf")
+    if os.path.exists(config_path):
         os.remove(config_path)
 
     # Remove from registry
