@@ -187,6 +187,17 @@
                                     <small class="form-hint">Deve essere una subnet privata unica.</small>
                                 </div>
                             </div>
+                            <div class="col-md-12">
+                                <div class="mb-3">
+                                    <label class="form-label">Interfaccia di Rete</label>
+                                    <select class="form-select" name="outgoing_interface"
+                                        id="outgoing-interface-select">
+                                        <option value="">Auto-detect (Consigliato)</option>
+                                    </select>
+                                    <small class="form-hint">Seleziona l'interfaccia di rete da usare per il routing
+                                        VPN.</small>
+                                </div>
+                            </div>
                         </div>
                     </form>
                 </div>
@@ -345,6 +356,30 @@
                 }
             } catch (e) {
                 showNotification('danger', 'Errore di connessione: ' + e.message);
+            }
+        }
+
+        async function loadNetworkInterfaces() {
+            try {
+                const response = await fetch(`${API_AJAX_HANDLER}?action=get_network_interfaces`);
+                const result = await response.json();
+                const select = document.getElementById('outgoing-interface-select');
+                
+                // Clear existing options except the auto-detect
+                while (select.options.length > 1) {
+                    select.remove(1);
+                }
+
+                if (result.success && result.body) {
+                    result.body.forEach(iface => {
+                        const option = document.createElement('option');
+                        option.value = iface.name;
+                        option.textContent = `${iface.name} (${iface.ip}/${iface.cidr})`;
+                        select.appendChild(option);
+                    });
+                }
+            } catch (e) {
+                console.error('Error loading network interfaces:', e);
             }
         }
 
@@ -514,7 +549,13 @@
         }
 
         // Init
-        document.addEventListener('DOMContentLoaded', loadInstances);
+        document.addEventListener('DOMContentLoaded', () => {
+            loadInstances();
+            
+            // Load network interfaces when modal is shown
+            const instanceModal = document.getElementById('modal-create-instance');
+            instanceModal.addEventListener('show.bs.modal', loadNetworkInterfaces);
+        });
 
     </script>
 </body>

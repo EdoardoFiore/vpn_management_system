@@ -3,7 +3,8 @@
 
 require_once 'config.php';
 
-function api_request($endpoint, $method = 'GET', $data = null) {
+function api_request($endpoint, $method = 'GET', $data = null)
+{
     $url = API_BASE_URL . $endpoint;
     $ch = curl_init();
 
@@ -17,20 +18,20 @@ function api_request($endpoint, $method = 'GET', $data = null) {
     curl_setopt($ch, CURLOPT_HTTPHEADER, $headers);
     curl_setopt($ch, CURLOPT_CUSTOMREQUEST, $method);
     // Timeout per evitare attese infinite
-    curl_setopt($ch, CURLOPT_CONNECTTIMEOUT, 5); 
+    curl_setopt($ch, CURLOPT_CONNECTTIMEOUT, 5);
     curl_setopt($ch, CURLOPT_TIMEOUT, 10);
 
     if ($method === 'POST' && $data) {
         curl_setopt($ch, CURLOPT_POSTFIELDS, json_encode($data));
     }
-    
+
     // Per avere l'header nella risposta (utile per il download)
     curl_setopt($ch, CURLOPT_HEADER, true);
 
     $response = curl_exec($ch);
     $http_code = curl_getinfo($ch, CURLINFO_HTTP_CODE);
     $header_size = curl_getinfo($ch, CURLINFO_HEADER_SIZE);
-    
+
     if (curl_errno($ch)) {
         // Errore cURL, es. backend non raggiungibile
         $error_msg = curl_error($ch);
@@ -38,7 +39,7 @@ function api_request($endpoint, $method = 'GET', $data = null) {
         // Ritorniamo un formato consistente per gli errori
         return ['success' => false, 'body' => ['detail' => "Errore di connessione all'API: " . $error_msg], 'code' => 503];
     }
-    
+
     curl_close($ch);
 
     $header = substr($response, 0, $header_size);
@@ -61,36 +62,48 @@ function api_request($endpoint, $method = 'GET', $data = null) {
 }
 
 
-function get_instances() {
+function get_network_interfaces()
+{
+    return api_request('/network/interfaces');
+}
+
+function get_instances()
+{
     return api_request('/instances');
 }
 
-function create_instance($name, $port, $subnet, $protocol) {
+function create_instance($name, $port, $subnet, $protocol)
+{
     return api_request('/instances', 'POST', [
         'name' => $name,
-        'port' => (int)$port,
+        'port' => (int) $port,
         'subnet' => $subnet,
         'protocol' => $protocol
     ]);
 }
 
-function delete_instance($instance_id) {
+function delete_instance($instance_id)
+{
     return api_request('/instances/' . urlencode($instance_id), 'DELETE');
 }
 
-function get_clients($instance_id) {
+function get_clients($instance_id)
+{
     return api_request('/instances/' . urlencode($instance_id) . '/clients');
 }
 
-function create_client($instance_id, $client_name) {
+function create_client($instance_id, $client_name)
+{
     return api_request('/instances/' . urlencode($instance_id) . '/clients', 'POST', ['client_name' => $client_name]);
 }
 
-function download_client_config($instance_id, $client_name) {
+function download_client_config($instance_id, $client_name)
+{
     return api_request('/instances/' . urlencode($instance_id) . '/clients/' . urlencode($client_name) . '/download');
 }
 
-function revoke_client($instance_id, $client_name) {
+function revoke_client($instance_id, $client_name)
+{
     return api_request('/instances/' . urlencode($instance_id) . '/clients/' . urlencode($client_name), 'DELETE');
 }
 ?>

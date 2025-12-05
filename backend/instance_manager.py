@@ -20,6 +20,7 @@ class Instance(BaseModel):
     protocol: str
     subnet: str  # e.g., "10.8.0.0/24"
     tun_interface: str # e.g., "tun0", "tun1"
+    outgoing_interface: str  # Network interface for routing (e.g., "eth0", "ens18")
     status: str = "stopped" # stopped, running
 
 def _load_instances() -> List[Instance]:
@@ -79,6 +80,9 @@ def _import_default_instance() -> Optional[Instance]:
             # TODO: Add more robust netmask to CIDR conversion if needed
 
             subnet = f"{network}/{cidr}"
+            
+            # Get default interface for the default instance
+            from iptables_manager import DEFAULT_INTERFACE
 
             return Instance(
                 id="default",
@@ -87,6 +91,7 @@ def _import_default_instance() -> Optional[Instance]:
                 protocol=protocol,
                 subnet=subnet,
                 tun_interface=tun_interface,
+                outgoing_interface=DEFAULT_INTERFACE,
                 status="stopped"
             )
     except Exception as e:
@@ -126,7 +131,7 @@ def _is_service_active(instance: Instance) -> bool:
     except subprocess.CalledProcessError:
         return False
 
-def create_instance(name: str, port: int, subnet: str, protocol: str = "udp") -> Instance:
+def create_instance(name: str, port: int, subnet: str, protocol: str = "udp", outgoing_interface: str = None) -> Instance:
     """
     Creates a new OpenVPN instance.
     """
@@ -150,6 +155,11 @@ def create_instance(name: str, port: int, subnet: str, protocol: str = "udp") ->
 
     instance_id = name.lower().replace(" ", "_")
 
+    # Use provided interface or auto-detect
+    if outgoing_interface is None:
+        from iptables_manager import DEFAULT_INTERFACE
+        outgoing_interface = DEFAULT_INTERFACE
+
     new_instance = Instance(
         id=instance_id,
         name=name,
@@ -157,6 +167,7 @@ def create_instance(name: str, port: int, subnet: str, protocol: str = "udp") ->
         protocol=protocol,
         subnet=subnet,
         tun_interface=tun_interface,
+        outgoing_interface=outgoing_interface,
         status="stopped"
     )
 
@@ -177,7 +188,7 @@ def create_instance(name: str, port: int, subnet: str, protocol: str = "udp") ->
         raise RuntimeError(f"Failed to start OpenVPN service: {e}")
 
     # Apply iptables
-    iptables_manager.add_openvpn_rules(port, protocol, tun_interface, subnet)
+    iptables_manager.add_openvpn_rules(port, protocol, tun_interface, subnet, new_instance.outgoing_interface)
 
     # Save
     instances.append(new_instance)
@@ -197,7 +208,7 @@ def delete_instance(instance_id: str):
     subprocess.run(["systemctl", "disable", service_name], check=False)
 
     # Remove iptables
-    iptables_manager.remove_openvpn_rules(inst.port, inst.protocol, inst.tun_interface, inst.subnet)
+    iptables_manager.remove_openvpn_rules(inst.port, inst.protocol, inst.tun_interface, inst.subnet, inst.outgoing_interface)
 
     # Remove Config
     config_filename = "server.conf" if inst.id == "default" else f"server_{inst.name}.conf"

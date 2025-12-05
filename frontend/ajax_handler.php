@@ -9,6 +9,11 @@ $action = $_GET['action'] ?? $_POST['action'] ?? '';
 
 
 switch ($action) {
+    case 'get_network_interfaces':
+        $response = get_network_interfaces();
+        echo json_encode($response);
+        break;
+
     case 'get_instances':
         $response = get_instances();
         echo json_encode($response);
@@ -19,7 +24,7 @@ switch ($action) {
         $port = $_POST['port'] ?? '';
         $subnet = $_POST['subnet'] ?? '';
         $protocol = $_POST['protocol'] ?? 'udp';
-        
+
         if (empty($name) || empty($port) || empty($subnet)) {
             echo json_encode(['success' => false, 'body' => ['detail' => 'Dati mancanti.']]);
             exit;

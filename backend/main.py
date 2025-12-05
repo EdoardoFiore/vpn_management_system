@@ -9,6 +9,7 @@ from pydantic import BaseModel
 
 import vpn_manager
 import instance_manager
+import network_utils
 
 # Regex per validare i nomi dei client (permette alfanumerici, underscore, trattini e punti)
 CLIENT_NAME_PATTERN = r"^[a-zA-Z0-9_.-]+$"
@@ -22,6 +23,7 @@ class InstanceRequest(BaseModel):
     port: int
     subnet: str
     protocol: str = "udp"
+    outgoing_interface: str = None  # Optional, auto-detect if not provided
 
 # --- Sicurezza con API Key ---
 API_KEY = os.getenv("API_KEY", "change-this-in-production")
@@ -69,7 +71,8 @@ async def create_instance(request: InstanceRequest):
             name=request.name,
             port=request.port,
             subnet=request.subnet,
-            protocol=request.protocol
+            protocol=request.protocol,
+            outgoing_interface=request.outgoing_interface
         )
         return instance
     except ValueError as e:
@@ -85,6 +88,17 @@ async def delete_instance(instance_id: str):
         return {"message": "Instance deleted"}
     except ValueError:
         raise HTTPException(status_code=404, detail="Instance not found")
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+# --- Endpoints Network ---
+
+@app.get("/api/network/interfaces", dependencies=[Depends(get_api_key)])
+async def get_network_interfaces():
+    """Restituisce la lista delle interfacce di rete disponibili."""
+    try:
+        interfaces = network_utils.get_network_interfaces()
+        return interfaces
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
