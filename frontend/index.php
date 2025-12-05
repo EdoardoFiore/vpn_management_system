@@ -524,11 +524,9 @@
             document.getElementById('dashboard-view').style.display = 'none';
             document.getElementById('instance-view').style.display = 'block';
 
-            document.getElementById('instanceTitle').textContent = instance.name;
-            document.getElementById('instancePort').textContent = instance.port;
-            document.getElementById('instanceSubnet').textContent = instance.subnet;
-            document.getElementById('instanceStatus').innerHTML =
-                `<span class="status status-${instance.status === 'running' ? 'green' : 'red'}"><span class="status-dot"></span>${instance.status}</span>`;
+            document.getElementById('current-instance-name').textContent = instance.name;
+            document.getElementById('current-instance-port').textContent = `Port: ${instance.port}`;
+            document.getElementById('current-instance-subnet').textContent = `Subnet: ${instance.subnet}`;
 
             fetchAndRenderClients();
             displayRoutes();
@@ -584,14 +582,18 @@
                     const clients = result.body;
 
                     clients.forEach(client => {
+                        // Strip instance prefix for display
+                        const displayName = client.name.replace(`${currentInstance.name}_`, '');
+                        const fullName = client.name; // Keep full name for API calls
+                        
                         if (client.status === 'connected') {
                             connBody.innerHTML += `
                                 <tr>
-                                    <td>${client.name}</td>
+                                    <td>${displayName}</td>
                                     <td>${client.virtual_ip || '-'}</td>
                                     <td>${formatDateTime(client.connected_since)}</td>
                                     <td>
-                                        <button class="btn btn-danger btn-sm btn-icon" onclick="revokeClient('${client.name}')">
+                                        <button class="btn btn-danger btn-sm btn-icon" onclick="revokeClient('${fullName}')">
                                             <i class="ti ti-trash"></i>
                                         </button>
                                     </td>
@@ -600,12 +602,12 @@
                         } else {
                             availBody.innerHTML += `
                                 <tr>
-                                    <td>${client.name}</td>
+                                    <td>${displayName}</td>
                                     <td>
-                                        <button class="btn btn-primary btn-sm btn-icon" onclick="downloadClient('${client.name}')">
+                                        <button class="btn btn-primary btn-sm btn-icon" onclick="downloadClient('${fullName}')">
                                             <i class="ti ti-download"></i>
                                         </button>
-                                        <button class="btn btn-danger btn-sm btn-icon" onclick="revokeClient('${client.name}')">
+                                        <button class="btn btn-danger btn-sm btn-icon" onclick="revokeClient('${fullName}')">
                                             <i class="ti ti-trash"></i>
                                         </button>
                                     </td>

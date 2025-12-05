@@ -42,32 +42,32 @@ def _read_file(path):
 def list_clients(instance_id: str) -> List[Dict]:
     """
     Restituisce la lista dei client per una specifica istanza.
-    Nota: Easy-RSA è condiviso, quindi 'get_all_clients_from_index' restituisce TUTTI i client.
-    Tuttavia, lo stato di connessione è specifico per istanza.
+    I client sono filtrati in base all'istanza specifica usando il prefisso del nome.
     """
     instance = instance_manager.get_instance(instance_id)
     if not instance:
         raise ValueError("Instance not found")
 
-    all_clients = _get_all_clients_from_pki()
+    # Get clients associated with this instance
+    instance_client_names = instance_manager.get_instance_clients(instance_id)
+    
+    all_clients_from_pki = _get_all_clients_from_pki()
     connected_clients = _get_connected_clients(instance.name)
 
-    # Filtriamo i client? Per ora mostriamo tutti i certificati validi.
-    # In un sistema multi-tenant reale, dovremmo associare i client alle istanze (es. via DB o prefisso nome).
-    # Per ora, assumiamo che tutti i client siano visibili su tutte le istanze, 
-    # ma lo stato "connected" dipenderà dall'istanza specifica.
-    
-    # TODO: Implementare un filtro per mostrare solo i client "appartenenti" a questa istanza se necessario.
-    # Per ora, restituiamo tutti.
-
-    for client in all_clients:
-        if client["name"] in connected_clients:
-            client["status"] = "connected"
-            client.update(connected_clients[client["name"]])
-        else:
-            client["status"] = "disconnected"
+    # Filter to only show clients belonging to this instance
+    filtered_clients = []
+    for client in all_clients_from_pki:
+        client_name = client["name"]
+        # Check if this client belongs to this instance
+        if client_name in instance_client_names:
+            if client_name in connected_clients:
+                client["status"] = "connected"
+                client.update(connected_clients[client_name])
+            else:
+                client["status"] = "disconnected"
+            filtered_clients.append(client)
             
-    return all_clients
+    return filtered_clients
 
 def _get_all_clients_from_pki():
     clients = []
@@ -131,27 +131,37 @@ def create_client(instance_id: str, client_name: str) -> Tuple[bool, Optional[st
     if not instance:
         return False, "Instance not found"
 
+    # Use instance-specific prefix for client name
+    prefixed_client_name = f"{instance.name}_{client_name}"
+    
     # 1. Check if client exists
     existing_clients = _get_all_clients_from_pki()
-    if any(c["name"] == client_name for c in existing_clients):
-        return False, f"Client '{client_name}' already exists."
+    if any(c["name"] == prefixed_client_name for c in existing_clients):
+        return False, f"Client '{client_name}' already exists for this instance."
 
     # 2. Create Certificate
-    cmd = f"cd {EASYRSA_DIR} && ./easyrsa --batch build-client-full {client_name} nopass"
+    cmd = f"cd {EASYRSA_DIR} && ./easyrsa --batch build-client-full {prefixed_client_name} nopass"
     out, code = _run_command(cmd, env_vars={"EASYRSA_CERT_EXPIRE": "3650"})
     if code != 0:
         return False, f"Easy-RSA Error: {out}"
 
     # 3. Generate .ovpn content
     try:
-        ovpn_content = _generate_ovpn_content(instance, client_name)
+        ovpn_content = _generate_ovpn_content(instance, prefixed_client_name)
     except Exception as e:
         return False, f"Error generating config: {e}"
 
-    # 4. Save .ovpn file
-    config_path = os.path.join(CLIENT_CONFIG_DIR, f"{client_name}.ovpn")
+    # 4. Save .ovpn file (using original client name for file)
+    config_path = os.path.join(CLIENT_CONFIG_DIR, f"{prefixed_client_name}.ovpn")
     with open(config_path, "w") as f:
         f.write(ovpn_content)
+    
+    # 5. Add client to instance's client list
+    try:
+        instance_manager.add_client_to_instance(instance_id, prefixed_client_name)
+    except Exception as e:
+        logger.error(f"Failed to add client to instance: {e}")
+        # Certificate already created, so we continue
 
     return True, None
 
@@ -167,7 +177,7 @@ def revoke_client(instance_id: str, client_name: str) -> Tuple[bool, str]:
     if not instance:
         return False, "Instance not found"
 
-    # 1. Revoke
+    # 1. Revoke (client_name is already prefixed)
     cmd = f"cd {EASYRSA_DIR} && ./easyrsa --batch revoke {client_name}"
     out, code = _run_command(cmd)
     if code != 0 and "already revoked" not in out:
@@ -178,22 +188,16 @@ def revoke_client(instance_id: str, client_name: str) -> Tuple[bool, str]:
     out, code = _run_command(cmd, env_vars={"EASYRSA_CRL_DAYS": "3650"})
     if code != 0:
         return False, f"CRL Gen Error: {out}"
-
-    # 3. Copy CRL (Assuming shared CRL path in config)
-    # Note: If instances have different CRL paths, we need to handle that.
-    # For now, we assume standard location or we copy to where instances expect it.
-    # Our instance_manager uses /etc/openvpn/easy-rsa/pki/crl.pem directly in config?
-    # Let's check instance_manager.py... it uses os.getenv("CRL_PATH", ...).
-    # If OpenVPN reads directly from PKI, we don't need to copy.
-    # But usually permissions are an issue.
-    # Let's copy to /etc/openvpn/crl.pem as a common place, or update all instances.
     
-    # For this implementation, let's assume we copy to /etc/openvpn/crl.pem and all instances use it.
-    # Or better, we restart the specific instance to reload CRL if it's configured to read it.
+    # 3. Remove client from instance's client list
+    try:
+        instance_manager.remove_client_from_instance(instance_id, client_name)
+    except Exception as e:
+        logger.error(f"Failed to remove client from instance: {e}")
     
-    # Restart Service
-    service_name = f"openvpn-server@server_{instance.name}"
-    subprocess.run(["systemctl", "restart", service_name], check=False)
+    # 4. Restart Service to reload CRL
+    service_name = f"openvpn@server_{instance.name}"
+    subprocess.run(["/usr/bin/systemctl", "restart", service_name], check=False)
 
     return True, f"Client {client_name} revoked."
 

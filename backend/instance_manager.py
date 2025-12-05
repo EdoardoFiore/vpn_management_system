@@ -23,6 +23,7 @@ class Instance(BaseModel):
     tun_interface: str # e.g., "tun0", "tun1"
     tunnel_mode: str = "full"  # "full" or "split"
     routes: List[Dict[str, str]] = []  # List of {"network": "192.168.1.0/24", "interface": "eth1"}
+    clients: List[str] = []  # List of client names associated with this instance
     status: str = "stopped" # stopped, running
 
 def _save_iptables_rules():
@@ -451,22 +452,26 @@ def _generate_openvpn_config(instance: Instance):
         config_lines.append('push "dhcp-option DNS 8.8.4.4"')
     elif instance.tunnel_mode == "split":
         # Add custom routes
-        for route in instance.routes:
-            route_network = route.get('network', '')
-            if route_network:
-                # Convert CIDR to network + netmask for push route command
-                if '/' in route_network:
-                    net_parts = route_network.split('/')
-                    route_net = net_parts[0]
-                    route_cidr = net_parts[1]
-                    # Convert CIDR to netmask
-                    route_mask = "255.255.255.0"
-                    if route_cidr == '8': route_mask = "255.0.0.0"
-                    elif route_cidr == '16': route_mask = "255.255.0.0"
-                    elif route_cidr == '24': route_mask = "255.255.255.0"
-                    config_lines.append(f'push "route {route_net} {route_mask}"')
-                else:
-                    config_lines.append(f'push "route {route_network} 255.255.255.0"')
+        if instance.routes and len(instance.routes) > 0:
+            for route in instance.routes:
+                route_network = route.get('network', '')
+                if route_network:
+                    # Convert CIDR to network + netmask for push route command
+                    if '/' in route_network:
+                        net_parts = route_network.split('/')
+                        route_net = net_parts[0]
+                        route_cidr = net_parts[1]
+                        # Convert CIDR to netmask
+                        route_mask = "255.255.255.0"
+                        if route_cidr == '8': route_mask = "255.0.0.0"
+                        elif route_cidr == '16': route_mask = "255.255.0.0"
+                        elif route_cidr == '24': route_mask = "255.255.255.0"
+                        elif route_cidr == '32': route_mask = "255.255.255.255"
+                        config_lines.append(f'push "route {route_net} {route_mask}"')
+                    else:
+                        config_lines.append(f'push "route {route_network} 255.255.255.0"')
+        else:
+            logger.warning(f"Split tunnel mode enabled but no routes defined for instance '{instance.name}'")
     
     # Logging and monitoring
     config_lines.extend([
@@ -507,6 +512,37 @@ def _generate_openvpn_config(instance: Instance):
     except Exception as e:
         logger.error(f"Failed to write config file {config_path}: {e}")
         raise
+
+def add_client_to_instance(instance_id: str, client_name: str):
+    """Add a client to an instance's client list."""
+    instances = _load_instances()
+    for inst in instances:
+        if inst.id == instance_id:
+            if client_name not in inst.clients:
+                inst.clients.append(client_name)
+                _save_instances(instances)
+                logger.info(f"Added client '{client_name}' to instance '{instance_id}'")
+            return
+    raise ValueError(f"Instance '{instance_id}' not found")
+
+def remove_client_from_instance(instance_id: str, client_name: str):
+    """Remove a client from an instance's client list."""
+    instances = _load_instances()
+    for inst in instances:
+        if inst.id == instance_id:
+            if client_name in inst.clients:
+                inst.clients.remove(client_name)
+                _save_instances(instances)
+                logger.info(f"Removed client '{client_name}' from instance '{instance_id}'")
+            return
+    raise ValueError(f"Instance '{instance_id}' not found")
+
+def get_instance_clients(instance_id: str) -> List[str]:
+    """Get list of clients associated with an instance."""
+    instance = get_instance(instance_id)
+    if not instance:
+        raise ValueError(f"Instance '{instance_id}' not found")
+    return instance.clients
 
 
 
