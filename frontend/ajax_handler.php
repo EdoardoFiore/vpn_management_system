@@ -20,16 +20,24 @@ switch ($action) {
         break;
 
     case 'create_instance':
-        $name = $_POST['name'] ?? '';
-        $port = $_POST['port'] ?? '';
-        $subnet = $_POST['subnet'] ?? '';
-        $protocol = $_POST['protocol'] ?? 'udp';
+        // Handle JSON payload
+        $input = file_get_contents('php://input');
+        $data = json_decode($input, true);
 
-        if (empty($name) || empty($port) || empty($subnet)) {
+        if (!$data || !isset($data['name']) || !isset($data['port']) || !isset($data['subnet'])) {
             echo json_encode(['success' => false, 'body' => ['detail' => 'Dati mancanti.']]);
             exit;
         }
-        $response = create_instance($name, $port, $subnet, $protocol);
+
+        $response = create_instance(
+            $data['name'],
+            $data['port'],
+            $data['subnet'],
+            $data['protocol'] ?? 'udp',
+            $data['outgoing_interface'] ?? null,
+            $data['tunnel_mode'] ?? 'full',
+            $data['routes'] ?? []
+        );
         echo json_encode($response);
         break;
 

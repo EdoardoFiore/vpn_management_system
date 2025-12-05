@@ -72,13 +72,16 @@ function get_instances()
     return api_request('/instances');
 }
 
-function create_instance($name, $port, $subnet, $protocol)
+function create_instance($name, $port, $subnet, $protocol, $outgoing_interface = null, $tunnel_mode = 'full', $routes = [])
 {
     return api_request('/instances', 'POST', [
         'name' => $name,
         'port' => (int) $port,
         'subnet' => $subnet,
-        'protocol' => $protocol
+        'protocol' => $protocol,
+        'outgoing_interface' => $outgoing_interface,
+        'tunnel_mode' => $tunnel_mode,
+        'routes' => $routes
     ]);
 }
 

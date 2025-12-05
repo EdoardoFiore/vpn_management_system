@@ -198,6 +198,29 @@
                                         VPN.</small>
                                 </div>
                             </div>
+                            <div class="col-md-12">
+                                <div class="mb-3">
+                                    <label class="form-label">Modalità Tunnel</label>
+                                    <select class="form-select" name="tunnel_mode" id="tunnel-mode-select"
+                                        onchange="toggleRouteConfig()">
+                                        <option value="full">Full Tunnel (tutto il traffico via VPN)</option>
+                                        <option value="split">Split Tunnel (solo rotte specifiche)</option>
+                                    </select>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Split Tunnel Routes Configuration -->
+                        <div id="routes-config" style="display: none;">
+                            <div class="mb-3">
+                                <label class="form-label">Rotte Personalizzate</label>
+                                <div id="routes-container"></div>
+                                <button type="button" class="btn btn-sm btn-outline-primary" onclick="addRoute()">
+                                    <i class="ti ti-plus"></i> Aggiungi Rotta
+                                </button>
+                                <small class="form-hint d-block mt-2">Specifica le subnet da rendere accessibili via VPN
+                                    (es: 192.168.1.0/24)</small>
+                            </div>
                         </div>
                     </form>
                 </div>
@@ -294,6 +317,70 @@
 
         // --- DASHBOARD FUNCTIONS ---
 
+        let routeCounter = 0;
+
+        function toggleRouteConfig() {
+            const tunnelMode = document.getElementById('tunnel-mode-select').value;
+            const routesConfig = document.getElementById('routes-config');
+            if (tunnelMode === 'split') {
+                routesConfig.style.display = 'block';
+                // Add first route if none
+                if (document.getElementById('routes-container').children.length === 0) {
+                    addRoute();
+                }
+            } else {
+                routesConfig.style.display = 'none';
+            }
+        }
+
+        function addRoute() {
+            const container = document.getElementById('routes-container');
+            const routeId = routeCounter++;
+            const html = `
+                <div class="row mb-2" id="route-${routeId}">
+                    <div class="col-md-5">
+                        <input type="text" class="form-control" placeholder="192.168.1.0/24" data-route-network="${routeId}" required>
+                    </div>
+                    <div class="col-md-5">
+                        <select class="form-select" data-route-interface="${routeId}" id="route-interface-${routeId}">
+                            <option value="">Seleziona Interfaccia</option>
+                        </select>
+                    </div>
+                    <div class="col-md-2">
+                        <button type="button" class="btn btn-danger btn-sm" onclick="removeRoute(${routeId})">
+                            <i class="ti ti-trash"></i>
+                        </button>
+                    </div>
+                </div>
+            `;
+            container.insertAdjacentHTML('beforeend', html);
+            // Populate interface dropdown for this route
+            populateRouteInterface(routeId);
+        }
+
+        async function populateRouteInterface(routeId) {
+            try {
+                const response = await fetch(`${API_AJAX_HANDLER}?action=get_network_interfaces`);
+                const result = await response.json();
+                const select = document.getElementById(`route-interface-${routeId}`);
+                
+                if (result.success && result.body) {
+                    result.body.forEach(iface => {
+                        const option = document.createElement('option');
+                        option.value = iface.name;
+                        option.textContent = `${iface.name} (${iface.ip}/${iface.cidr})`;
+                        select.appendChild(option);
+                    });
+                }
+            } catch (e) {
+                console.error('Error loading interfaces for route:', e);
+            }
+        }
+
+        function removeRoute(routeId) {
+            document.getElementById(`route-${routeId}`).remove();
+        }
+
         async function loadInstances() {
             try {
                 const response = await fetch(`${API_AJAX_HANDLER}?action=get_instances`);
@@ -340,16 +427,51 @@
         async function createInstance() {
             const form = document.getElementById('createInstanceForm');
             const formData = new FormData(form);
-            formData.append('action', 'create_instance');
+            
+            // Gather routes if split tunnel
+            const tunnelMode = formData.get('tunnel_mode');
+            const routes = [];
+            
+            if (tunnelMode === 'split') {
+                const routeNetworks = document.querySelectorAll('[data-route-network]');
+                routeNetworks.forEach(input => {
+                    const routeId = input.getAttribute('data-route-network');
+                    const network = input.value.trim();
+                    const interfaceSelect = document.querySelector(`[data-route-interface="${routeId}"]`);
+                    const interfaceName = interfaceSelect ? interfaceSelect.value : '';
+                    
+                    if (network && interfaceName) {
+                        routes.push({ network, interface: interfaceName });
+                    }
+                });
+            }
+            
+            // Build request payload
+            const payload = {
+                action: 'create_instance',
+                name: formData.get('name'),
+                port: parseInt(formData.get('port')),
+                subnet: formData.get('subnet'),
+                protocol: 'udp',
+                outgoing_interface: formData.get('outgoing_interface') || null,
+                tunnel_mode: tunnelMode,
+                routes: routes
+            };
 
             try {
-                const response = await fetch(API_AJAX_HANDLER, { method: 'POST', body: formData });
+                const response = await fetch(API_AJAX_HANDLER, { 
+                    method: 'POST', 
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(payload)
+                });
                 const result = await response.json();
 
                 if (result.success) {
                     showNotification('success', 'Istanza creata con successo!');
                     bootstrap.Modal.getInstance(document.getElementById('modal-create-instance')).hide();
                     form.reset();
+                    document.getElementById('routes-container').innerHTML = '';
+                    routeCounter = 0;
                     loadInstances();
                 } else {
                     showNotification('danger', 'Errore creazione: ' + (result.body.detail || 'Sconosciuto'));
@@ -364,7 +486,7 @@
                 const response = await fetch(`${API_AJAX_HANDLER}?action=get_network_interfaces`);
                 const result = await response.json();
                 const select = document.getElementById('outgoing-interface-select');
-                
+
                 // Clear existing options except the auto-detect
                 while (select.options.length > 1) {
                     select.remove(1);
@@ -551,7 +673,7 @@
         // Init
         document.addEventListener('DOMContentLoaded', () => {
             loadInstances();
-            
+
             // Load network interfaces when modal is shown
             const instanceModal = document.getElementById('modal-create-instance');
             instanceModal.addEventListener('show.bs.modal', loadNetworkInterfaces);

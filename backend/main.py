@@ -18,12 +18,18 @@ CLIENT_NAME_PATTERN = r"^[a-zA-Z0-9_.-]+$"
 class ClientRequest(BaseModel):
     client_name: str
 
+class RouteConfig(BaseModel):
+    network: str  # e.g., "192.168.1.0/24"
+    interface: str  # e.g., "eth1"
+
 class InstanceRequest(BaseModel):
     name: str
     port: int
     subnet: str
     protocol: str = "udp"
     outgoing_interface: str = None  # Optional, auto-detect if not provided
+    tunnel_mode: str = "full"  # "full" or "split"
+    routes: List[RouteConfig] = []  # Custom routes for split tunnel
 
 # --- Sicurezza con API Key ---
 API_KEY = os.getenv("API_KEY", "change-this-in-production")
@@ -72,7 +78,9 @@ async def create_instance(request: InstanceRequest):
             port=request.port,
             subnet=request.subnet,
             protocol=request.protocol,
-            outgoing_interface=request.outgoing_interface
+            outgoing_interface=request.outgoing_interface,
+            tunnel_mode=request.tunnel_mode,
+            routes=[route.dict() for route in request.routes]
         )
         return instance
     except ValueError as e:

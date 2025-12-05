@@ -21,6 +21,8 @@ class Instance(BaseModel):
     subnet: str  # e.g., "10.8.0.0/24"
     tun_interface: str # e.g., "tun0", "tun1"
     outgoing_interface: str  # Network interface for routing (e.g., "eth0", "ens18")
+    tunnel_mode: str = "full"  # "full" or "split"
+    routes: List[Dict[str, str]] = []  # List of {"network": "192.168.1.0/24", "interface": "eth1"}
     status: str = "stopped" # stopped, running
 
 def _load_instances() -> List[Instance]:
@@ -92,6 +94,8 @@ def _import_default_instance() -> Optional[Instance]:
                 subnet=subnet,
                 tun_interface=tun_interface,
                 outgoing_interface=DEFAULT_INTERFACE,
+                tunnel_mode="full",  # Default to full tunnel
+                routes=[],
                 status="stopped"
             )
     except Exception as e:
@@ -117,8 +121,8 @@ def get_instance(instance_id: str) -> Optional[Instance]:
     return None
 
 def _get_service_name(instance: Instance) -> str:
-    # If it's the default instance, it might be running as 'openvpn@server' or just 'openvpn'
-    # But for consistency in our new system, we treat it as 'openvpn@server' if the file is server.conf
+    # systemd openvpn instances use openvpn@<config-name>
+    # where config-name is the filename without .conf
     if instance.id == "default":
         return "openvpn@server"
     return f"openvpn@server_{instance.name}"
@@ -131,7 +135,9 @@ def _is_service_active(instance: Instance) -> bool:
     except subprocess.CalledProcessError:
         return False
 
-def create_instance(name: str, port: int, subnet: str, protocol: str = "udp", outgoing_interface: str = None) -> Instance:
+def create_instance(name: str, port: int, subnet: str, protocol: str = "udp", 
+                   outgoing_interface: str = None, tunnel_mode: str = "full", 
+                   routes: List[Dict[str, str]] = None) -> Instance:
     """
     Creates a new OpenVPN instance.
     """
@@ -159,6 +165,9 @@ def create_instance(name: str, port: int, subnet: str, protocol: str = "udp", ou
     if outgoing_interface is None:
         from iptables_manager import DEFAULT_INTERFACE
         outgoing_interface = DEFAULT_INTERFACE
+    
+    if routes is None:
+        routes = []
 
     new_instance = Instance(
         id=instance_id,
@@ -168,6 +177,8 @@ def create_instance(name: str, port: int, subnet: str, protocol: str = "udp", ou
         subnet=subnet,
         tun_interface=tun_interface,
         outgoing_interface=outgoing_interface,
+        tunnel_mode=tunnel_mode,
+        routes=routes,
         status="stopped"
     )
 
@@ -224,6 +235,8 @@ def _generate_openvpn_config(instance: Instance):
     """
     Generates a server configuration file based on a template or defaults.
     """
+    logger.info(f"Generating config for instance '{instance.name}'")
+    
     ca_path = os.getenv("CA_PATH", "/etc/openvpn/easy-rsa/pki/ca.crt")
     cert_path = os.getenv("CERT_PATH", "/etc/openvpn/easy-rsa/pki/issued/server.crt")
     key_path = os.getenv("KEY_PATH", "/etc/openvpn/easy-rsa/pki/private/server.key")
@@ -239,33 +252,58 @@ def _generate_openvpn_config(instance: Instance):
     if cidr == '8': netmask = "255.0.0.0"
     elif cidr == '16': netmask = "255.255.0.0"
     elif cidr == '24': netmask = "255.255.255.0"
-    # For other CIDRs, OpenVPN topology subnet handles it, but 'server' directive needs netmask.
-    # We'll stick to common ones or rely on topology subnet if supported fully.
     
-    config_content = f"""
-port {instance.port}
-proto {instance.protocol}
-dev {instance.tun_interface}
-ca {ca_path}
-cert {cert_path}
-key {key_path}
-dh {dh_path}
-topology subnet
-server {network} {netmask}
-ifconfig-pool-persist ipp_{instance.name}.txt
-keepalive 10 120
-cipher AES-256-GCM
-user nobody
-group nogroup
-persist-key
-persist-tun
-status /var/log/openvpn/status_{instance.name}.log
-verb 3
-crl-verify {crl_path}
-explicit-exit-notify 1
-"""
+    # Base config
+    config_lines = [
+        f"port {instance.port}",
+        f"proto {instance.protocol}",
+        f"dev {instance.tun_interface}",
+        f"ca {ca_path}",
+        f"cert {cert_path}",
+        f"key {key_path}",
+        f"dh {dh_path}",
+        "topology subnet",
+        f"server {network} {netmask}",
+        f"ifconfig-pool-persist ipp_{instance.name}.txt",
+        "keepalive 10 120",
+        "cipher AES-256-GCM",
+        "user nobody",
+        "group nogroup",
+        "persist-key",
+        "persist-tun",
+        f"status /var/log/openvpn/status_{instance.name}.log",
+        "verb 3",
+        f"crl-verify {crl_path}",
+        "explicit-exit-notify 1"
+    ]
+    
+    # Add routing based on tunnel mode
+    if instance.tunnel_mode == "full":
+        config_lines.append('push "redirect-gateway def1 bypass-dhcp"')
+        config_lines.append('push "dhcp-option DNS 8.8.8.8"')
+        config_lines.append('push "dhcp-option DNS 8.8.4.4"')
+    elif instance.tunnel_mode == "split":
+        # Add custom routes
+        for route in instance.routes:
+            route_network = route.get('network', '')
+            if route_network:
+                config_lines.append(f'push "route {route_network.replace("/", " ")}"')
+    
+    config_content = "\n".join(config_lines) + "\n"
+    
+    # Ensure directory exists
+    os.makedirs(OPENVPN_CONFIG_DIR, exist_ok=True)
     
     config_path = os.path.join(OPENVPN_CONFIG_DIR, f"server_{instance.name}.conf")
-    with open(config_path, "w") as f:
-        f.write(config_content)
+    logger.info(f"Writing config to: {config_path}")
+    
+    try:
+        with open(config_path, "w") as f:
+            f.write(config_content)
+        logger.info(f"Config file created successfully: {config_path}")
+        # Set proper permissions
+        os.chmod(config_path, 0o644)
+    except Exception as e:
+        logger.error(f"Failed to write config file {config_path}: {e}")
+        raise
 
