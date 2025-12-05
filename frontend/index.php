@@ -150,6 +150,56 @@
                                     </div>
                                 </div>
                             </div>
+
+                            <!-- Routes Management Section -->
+                            <div class="col-md-6">
+                                <div class="card">
+                                    <div class="card-header">
+                                        <h3 class="card-title">Rotte Personalizzate</h3>
+                                        <div class="card-actions">
+                                            <button class="btn btn-sm btn-primary" onclick="toggleRouteEdit()">
+                                                <i class="ti ti-edit"></i> Modifica
+                                            </button>
+                                        </div>
+                                    </div>
+                                    <div class="card-body">
+                                        <!-- View Mode -->
+                                        <div id="routes-view-mode">
+                                            <div class="mb-2">
+                                                <strong>Modalità Tunnel:</strong>
+                                                <span id="tunnel-mode-display" class="badge bg-info ms-2"></span>
+                                            </div>
+                                            <div id="routes-list">
+                                                <!-- Routes will be populated here -->
+                                            </div>
+                                        </div>
+
+                                        <!-- Edit Mode -->
+                                        <div id="routes-edit-mode" style="display: none;">
+                                            <div class="mb-3">
+                                                <label class="form-label">Modalità Tunnel</label>
+                                                <select class="form-select" id="tunnel-mode-edit">
+                                                    <option value="full">Full Tunnel</option>
+                                                    <option value="split">Split Tunnel</option>
+                                                </select>
+                                            </div>
+                                            <div id="routes-edit-container"></div>
+                                            <button type="button" class="btn btn-sm btn-outline-primary mb-3"
+                                                onclick="addRouteEdit()">
+                                                <i class="ti ti-plus"></i> Aggiungi Rotta
+                                            </button>
+                                            <div class="mt-3">
+                                                <button class="btn btn-success" onclick="saveRoutes()">
+                                                    <i class="ti ti-check"></i> Salva
+                                                </button>
+                                                <button class="btn btn-secondary" onclick="cancelRouteEdit()">
+                                                    <i class="ti ti-x"></i> Annulla
+                                                </button>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
                         </div>
                     </div>
 
@@ -474,11 +524,14 @@
             document.getElementById('dashboard-view').style.display = 'none';
             document.getElementById('instance-view').style.display = 'block';
 
-            document.getElementById('current-instance-name').textContent = instance.name;
-            document.getElementById('current-instance-port').textContent = 'Porta: ' + instance.port;
-            document.getElementById('current-instance-subnet').textContent = 'Subnet: ' + instance.subnet;
+            document.getElementById('instanceTitle').textContent = instance.name;
+            document.getElementById('instancePort').textContent = instance.port;
+            document.getElementById('instanceSubnet').textContent = instance.subnet;
+            document.getElementById('instanceStatus').innerHTML =
+                `<span class="status status-${instance.status === 'running' ? 'green' : 'red'}"><span class="status-dot"></span>${instance.status}</span>`;
 
             fetchAndRenderClients();
+            displayRoutes();
         }
 
         function showDashboard() {
@@ -628,6 +681,179 @@
                     fetchAndRenderClients();
                 } else {
                     showNotification('danger', 'Errore revoca: ' + (result.body.detail || 'Sconosciuto'));
+                }
+            } catch (e) {
+                showNotification('danger', 'Errore di connessione: ' + e.message);
+            }
+        }
+
+        // --- ROUTE MANAGEMENT FUNCTIONS ---
+
+        let editRouteCounter = 0;
+
+        function displayRoutes() {
+            if (!currentInstance) return;
+
+            // Display tunnel mode
+            const tunnelModeDisplay = document.getElementById('tunnel-mode-display');
+            tunnelModeDisplay.textContent = currentInstance.tunnel_mode === 'full' ? 'Full Tunnel' : 'Split Tunnel';
+            tunnelModeDisplay.className = `badge bg-${currentInstance.tunnel_mode === 'full' ? 'primary' : 'warning'} ms-2`;
+
+            // Display routes list
+            const routesList = document.getElementById('routes-list');
+            if (!currentInstance.routes || currentInstance.routes.length === 0) {
+                routesList.innerHTML = '<p class="text-muted mt-2">Nessuna rotta personalizzata</p>';
+            } else {
+                let html = '<div class="list-group list-group-flush mt-2">';
+                currentInstance.routes.forEach(route => {
+                    html += `
+                        <div class="list-group-item">
+                            <div class="row align-items-center">
+                                <div class="col-auto">
+                                    <i class="ti ti-route text-muted"></i>
+                                </div>
+                                <div class="col">
+                                    <strong>${route.network}</strong>
+                                    <div class="text-muted small">via ${route.interface}</div>
+                                </div>
+                            </div>
+                        </div>
+                    `;
+                });
+                html += '</div>';
+                routesList.innerHTML = html;
+            }
+        }
+
+        async function toggleRouteEdit() {
+            const viewMode = document.getElementById('routes-view-mode');
+            const editMode = document.getElementById('routes-edit-mode');
+
+            viewMode.style.display = 'none';
+            editMode.style.display = 'block';
+
+            // Pre-populate edit form
+            document.getElementById('tunnel-mode-edit').value = currentInstance.tunnel_mode;
+
+            // Clear and populate routes
+            const container = document.getElementById('routes-edit-container');
+            container.innerHTML = '';
+            editRouteCounter = 0;
+
+            if (currentInstance.routes && currentInstance.routes.length > 0) {
+                for (const route of currentInstance.routes) {
+                    await addRouteEdit(route.network, route.interface);
+                }
+            }
+        }
+
+        function cancelRouteEdit() {
+            document.getElementById('routes-view-mode').style.display = 'block';
+            document.getElementById('routes-edit-mode').style.display = 'none';
+        }
+
+        async function addRouteEdit(network = '', interfaceName = '') {
+            const container = document.getElementById('routes-edit-container');
+            const routeId = editRouteCounter++;
+
+            const html = `
+                <div class="row mb-2" id="edit-route-${routeId}">
+                    <div class="col-md-5">
+                        <input type="text" class="form-control" 
+                            placeholder="192.168.1.0/24" 
+                            data-edit-route-network="${routeId}" 
+                            value="${network}">
+                    </div>
+                    <div class="col-md-5">
+                        <select class="form-select" 
+                            data-edit-route-interface="${routeId}" 
+                            id="edit-route-interface-${routeId}">
+                            <option value="">Seleziona Interfaccia</option>
+                        </select>
+                    </div>
+                    <div class="col-md-2">
+                        <button type="button" class="btn btn-danger btn-sm" onclick="removeRouteEdit(${routeId})">
+                            <i class="ti ti-trash"></i>
+                        </button>
+                    </div>
+                </div>
+            `;
+            container.insertAdjacentHTML('beforeend', html);
+
+            // Populate interface dropdown
+            await populateEditRouteInterface(routeId, interfaceName);
+        }
+
+        async function populateEditRouteInterface(routeId, selectedInterface = '') {
+            try {
+                const response = await fetch(`${API_AJAX_HANDLER}?action=get_network_interfaces`);
+                const result = await response.json();
+                const select = document.getElementById(`edit-route-interface-${routeId}`);
+
+                if (result.success && result.body) {
+                    result.body.forEach(iface => {
+                        const option = document.createElement('option');
+                        option.value = iface.name;
+                        option.textContent = `${iface.name} (${iface.ip}/${iface.cidr})`;
+                        if (iface.name === selectedInterface) {
+                            option.selected = true;
+                        }
+                        select.appendChild(option);
+                    });
+                }
+            } catch (e) {
+                console.error('Error loading interfaces:', e);
+            }
+        }
+
+        function removeRouteEdit(routeId) {
+            document.getElementById(`edit-route-${routeId}`).remove();
+        }
+
+        async function saveRoutes() {
+            if (!currentInstance) return;
+
+            const tunnelMode = document.getElementById('tunnel-mode-edit').value;
+            const routes = [];
+
+            // Gather routes
+            const routeNetworks = document.querySelectorAll('[data-edit-route-network]');
+            routeNetworks.forEach(input => {
+                const routeId = input.getAttribute('data-edit-route-network');
+                const network = input.value.trim();
+                const interfaceSelect = document.querySelector(`[data-edit-route-interface="${routeId}"]`);
+                const interfaceName = interfaceSelect ? interfaceSelect.value : '';
+
+                if (network && interfaceName) {
+                    routes.push({ network, interface: interfaceName });
+                }
+            });
+
+            // Send update
+            const payload = {
+                action: 'update_instance_routes',
+                instance_id: currentInstance.id,
+                tunnel_mode: tunnelMode,
+                routes: routes
+            };
+
+            try {
+                const response = await fetch(API_AJAX_HANDLER, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(payload)
+                });
+                const result = await response.json();
+
+                if (result.success) {
+                    showNotification('success', 'Rotte aggiornate con successo!');
+                    // Refresh instance data
+                    currentInstance.tunnel_mode = tunnelMode;
+                    currentInstance.routes = routes;
+                    displayRoutes();
+                    cancelRouteEdit();
+                } else {
+                    showNotification('danger', 'Errore aggiornamento rotte: ' + (result.body?.detail || 'Sconosciuto'));
                 }
             } catch (e) {
                 showNotification('danger', 'Errore di connessione: ' + e.message);

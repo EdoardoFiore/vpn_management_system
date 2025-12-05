@@ -272,14 +272,75 @@ def delete_instance(instance_id: str):
     _save_iptables_rules()
 
     # Remove Config
-    config_filename = "server.conf" if inst.id == "default" else f"server_{inst.name}.conf"
-    config_path = os.path.join(OPENVPN_CONFIG_DIR, config_filename)
-    if os.path.exists(config_path):
         os.remove(config_path)
 
     # Remove from registry
     instances = [i for i in instances if i.id != instance_id]
     _save_instances(instances)
+
+def update_instance_routes(instance_id: str, tunnel_mode: str, routes: List[Dict[str, str]]) -> Instance:
+    """
+    Updates the routes for an existing instance.
+    Regenerates config and restarts the service.
+    """
+    logger.info(f"Updating routes for instance '{instance_id}'")
+    
+    instances = get_all_instances()
+    instance = None
+    for inst in instances:
+        if inst.id == instance_id:
+            instance = inst
+            break
+    
+    if not instance:
+        raise ValueError(f"Instance '{instance_id}' not found")
+    
+    # Update routes and tunnel mode
+    old_routes = instance.routes.copy()
+    instance.tunnel_mode = tunnel_mode
+    instance.routes = routes
+    
+    logger.info(f"Tunnel mode: {tunnel_mode}, Routes count: {len(routes)}")
+    
+    # Regenerate config file
+    try:
+        _generate_openvpn_config(instance)
+        logger.info("Config regenerated successfully")
+    except Exception as e:
+        logger.error(f"Failed to regenerate config:  {e}")
+        raise RuntimeError(f"Failed to regenerate config: {e}")
+    
+    # Update iptables rules for routes
+    # Remove old route forwarding rules
+    for route in old_routes:
+        route_network = route.get('network')
+        if route_network:
+            iptables_manager.remove_forwarding_rule(instance.subnet, route_network)
+    
+    # Add new route forwarding rules
+    for route in routes:
+        route_network = route.get('network')
+        route_interface = route.get('interface')
+        if route_network and route_interface:
+            iptables_manager.add_forwarding_rule(instance.subnet, route_network)
+    
+    # Persist iptables
+    _save_iptables_rules()
+    
+    # Restart OpenVPN service to apply changes
+    service_name = _get_service_name(instance)
+    try:
+        logger.info(f"Restarting service: {service_name}")
+        subprocess.run(["/usr/bin/systemctl", "restart", service_name], check=True)
+        logger.info("Service restarted successfully")
+    except subprocess.CalledProcessError as e:
+        logger.error(f"Failed to restart service: {e}")
+        raise RuntimeError(f"Failed to restart OpenVPN service: {e}")
+    
+    # Save updated instance
+    _save_instances(instances)
+    
+    return instance
 
 def _generate_openvpn_config(instance: Instance):
     """

@@ -52,10 +52,28 @@ switch ($action) {
     case 'delete_instance':
         $instance_id = $_POST['instance_id'] ?? '';
         if (empty($instance_id)) {
-            echo json_encode(['success' => false, 'body' => ['detail' => 'ID istanza mancante.']]);
+            echo json_encode(['success' => false, 'body' => ['detail' => 'Instance ID mancante.']]);
             exit;
         }
         $response = delete_instance($instance_id);
+        echo json_encode($response);
+        break;
+
+    case 'update_instance_routes':
+        // Handle JSON payload
+        $input = file_get_contents('php://input');
+        $data = json_decode($input, true);
+
+        if (!$data || !isset($data['instance_id'])) {
+            echo json_encode(['success' => false, 'body' => ['detail' => 'Instance ID mancante.']]);
+            exit;
+        }
+
+        $response = update_instance_routes(
+            $data['instance_id'],
+            $data['tunnel_mode'] ?? 'full',
+            $data['routes'] ?? []
+        );
         echo json_encode($response);
         break;
 

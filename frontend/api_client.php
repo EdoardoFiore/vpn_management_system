@@ -86,7 +86,15 @@ function create_instance($name, $port, $subnet, $protocol, $tunnel_mode = 'full'
 
 function delete_instance($instance_id)
 {
-    return api_request('/instances/' . urlencode($instance_id), 'DELETE');
+    return api_request("/instances/$instance_id", 'DELETE');
+}
+
+function update_instance_routes($instance_id, $tunnel_mode, $routes)
+{
+    return api_request("/instances/$instance_id/routes", 'PATCH', [
+        'tunnel_mode' => $tunnel_mode,
+        'routes' => $routes
+    ]);
 }
 
 function get_clients($instance_id)
