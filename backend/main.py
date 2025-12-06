@@ -84,8 +84,6 @@ async def create_instance(request: InstanceRequest):
             subnet=request.subnet,
             protocol=request.protocol,
             tunnel_mode=request.tunnel_mode,
-            protocol=request.protocol,
-            tunnel_mode=request.tunnel_mode,
             routes=[route.dict() for route in request.routes],
             dns_servers=request.dns_servers
         )

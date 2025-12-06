@@ -240,22 +240,84 @@ function openInstance(instance) {
     document.getElementById('current-instance-port').textContent = `Port: ${instance.port}`;
     document.getElementById('current-instance-subnet').textContent = `Subnet: ${instance.subnet}`;
 
-    // Add DNS display if not exists (dynamic check or just append)
-    // For now, simpler to reuse subnet element or create new on fly if ID exists, 
-    // but better to assuming the HTML structure supports it.
-    // Let's assume user accepts not seeing it in the header for now, OR I inject it.
-    let dnsDisplay = document.getElementById('current-instance-dns');
-    if (!dnsDisplay) {
-        // Create if missing (quick hack to avoid modifying HTML structure too much)
-        const parent = document.getElementById('current-instance-subnet').parentNode; // The text-muted div
-        dnsDisplay = document.createElement('div');
-        dnsDisplay.id = 'current-instance-dns';
-        parent.appendChild(dnsDisplay);
+    // Render DNS Badge
+    const dnsContainer = document.getElementById('current-instance-dns-container');
+    if (dnsContainer) {
+        let dnsText = 'Default DNS';
+        if (instance.dns_servers && instance.dns_servers.length > 0) {
+            dnsText = instance.dns_servers.join(', ');
+        }
+
+        dnsContainer.innerHTML = `
+            <span class="badge badge-outline text-blue ms-2" style="background: rgba(32, 107, 196, 0.1);">
+                DNS: ${dnsText}
+                <a href="#" class="ms-2 text-blue" onclick="openDnsEditModal(); return false;">
+                    <i class="ti ti-pencil"></i>
+                </a>
+            </span>
+        `;
     }
-    dnsDisplay.textContent = `DNS: ${formatDnsList(instance.dns_servers)}`;
 
     fetchAndRenderClients();
     displayRoutes();
+}
+
+function openDnsEditModal() {
+    if (!currentInstance) return;
+
+    const input = document.getElementById('dns-servers-modal-input');
+    if (currentInstance.dns_servers && Array.isArray(currentInstance.dns_servers)) {
+        input.value = currentInstance.dns_servers.join(', ');
+    } else {
+        input.value = '';
+    }
+
+    new bootstrap.Modal(document.getElementById('modal-edit-dns')).show();
+}
+
+async function saveDnsConfig() {
+    if (!currentInstance) return;
+
+    const input = document.getElementById('dns-servers-modal-input').value;
+    let dnsServers = [];
+    if (input && input.trim() !== '') {
+        dnsServers = input.split(',').map(s => s.trim()).filter(s => s !== '');
+    }
+
+    // We reuse update_instance_routes but keep current tunnel/routes
+    const payload = {
+        action: 'update_instance_routes',
+        instance_id: currentInstance.id,
+        tunnel_mode: currentInstance.tunnel_mode,
+        routes: currentInstance.routes,
+        dns_servers: dnsServers
+    };
+
+    try {
+        const response = await fetch(API_AJAX_HANDLER, {
+            method: 'PATCH',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(payload)
+        });
+        const result = await response.json();
+
+        if (result.success) {
+            showNotification('success', 'DNS aggiornati con successo!');
+            currentInstance.dns_servers = dnsServers;
+
+            // Update UI
+            openInstance(currentInstance); // Re-render header
+
+            // Close modal
+            const modalEl = document.getElementById('modal-edit-dns');
+            const modalInstance = bootstrap.Modal.getOrCreateInstance(modalEl);
+            modalInstance.hide();
+        } else {
+            showNotification('danger', 'Errore aggiornamento DNS: ' + (result.body?.detail || 'Sconosciuto'));
+        }
+    } catch (e) {
+        showNotification('danger', 'Errore di connessione: ' + e.message);
+    }
 }
 
 function showDashboard() {
@@ -463,14 +525,6 @@ async function toggleRouteEdit() {
     // Pre-populate edit form
     document.getElementById('tunnel-mode-edit').value = currentInstance.tunnel_mode;
 
-    // Populate DNS
-    const dnsEdit = document.getElementById('dns-servers-edit');
-    if (currentInstance.dns_servers && Array.isArray(currentInstance.dns_servers)) {
-        dnsEdit.value = currentInstance.dns_servers.join(', ');
-    } else {
-        dnsEdit.value = '';
-    }
-
     toggleRouteConfigEdit();
 
     // Clear and populate routes
@@ -566,11 +620,7 @@ async function saveRoutes() {
     if (!currentInstance) return;
 
     const tunnelMode = document.getElementById('tunnel-mode-edit').value;
-    const dnsInput = document.getElementById('dns-servers-edit').value;
-    let dnsServers = [];
-    if (dnsInput && dnsInput.trim() !== '') {
-        dnsServers = dnsInput.split(',').map(s => s.trim()).filter(s => s !== '');
-    }
+    // DNS is handled separately now
 
     const routes = [];
 
@@ -591,10 +641,9 @@ async function saveRoutes() {
     const payload = {
         action: 'update_instance_routes',
         instance_id: currentInstance.id,
-        instance_id: currentInstance.id,
         tunnel_mode: tunnelMode,
         routes: routes,
-        dns_servers: dnsServers
+        dns_servers: currentInstance.dns_servers // Preserve existing DNS
     };
 
     try {
@@ -610,11 +659,6 @@ async function saveRoutes() {
             // Refresh instance data
             currentInstance.tunnel_mode = tunnelMode;
             currentInstance.routes = routes;
-            currentInstance.dns_servers = dnsServers;
-
-            // Update display
-            let dnsDisplay = document.getElementById('current-instance-dns');
-            if (dnsDisplay) dnsDisplay.textContent = `DNS: ${formatDnsList(dnsServers)}`;
 
             displayRoutes();
             cancelRouteEdit();

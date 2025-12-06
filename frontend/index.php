@@ -163,6 +163,12 @@
                                         </div>
                                     </div>
                                     <div class="card-body">
+                                        <div class="d-flex align-items-center mt-2 text-muted">
+                                            <div id="current-instance-port" class="me-3"></div>
+                                            <div id="current-instance-subnet" class="me-3"></div>
+                                            <div id="current-instance-dns-container" class="d-flex align-items-center">
+                                            </div>
+                                        </div>
                                         <!-- View Mode -->
                                         <div id="routes-view-mode">
                                             <div class="mb-2">
@@ -176,10 +182,6 @@
 
                                         <!-- Edit Mode -->
                                         <div id="routes-edit-mode" style="display: none;">
-                                            <div class="mb-3">
-                                                <label class="form-label">DNS Servers (Opzionale)</label>
-                                                <input type="text" class="form-control" id="dns-servers-edit" placeholder="Es: 192.168.178.242, 8.8.8.8">
-                                            </div>
                                             <div class="mb-3">
                                                 <label class="form-label">Modalità Tunnel</label>
                                                 <select class="form-select" id="tunnel-mode-edit"
@@ -245,8 +247,10 @@
                             <div class="col-md-12">
                                 <div class="mb-3">
                                     <label class="form-label">DNS Servers (Opzionale)</label>
-                                    <input type="text" class="form-control" name="dns_servers" placeholder="Es: 192.168.178.242, 8.8.8.8">
-                                    <small class="form-hint">Lascia vuoto per usare i default (Google DNS per Full Tunnel).</small>
+                                    <input type="text" class="form-control" name="dns_servers"
+                                        placeholder="Es: 192.168.178.242, 8.8.8.8">
+                                    <small class="form-hint">Lascia vuoto per usare i default (Google DNS per Full
+                                        Tunnel).</small>
                                 </div>
                             </div>
                             <div class="col-md-12">
@@ -304,6 +308,32 @@
                                     data-bs-dismiss="modal">Revoca</a></div>
                         </div>
                     </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal Edit DNS -->
+    <div class="modal modal-blur fade" id="modal-edit-dns" tabindex="-1" role="dialog" aria-hidden="true">
+        <div class="modal-dialog modal-sm modal-dialog-centered" role="document">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">Modifica DNS</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+                    <form id="editDnsForm">
+                        <div class="mb-3">
+                            <label class="form-label">DNS Servers</label>
+                            <input type="text" class="form-control" id="dns-servers-modal-input"
+                                placeholder="Es: 192.168.178.242, 8.8.8.8">
+                            <small class="form-hint">Lascia vuoto per usare i default.</small>
+                        </div>
+                    </form>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn me-auto" data-bs-dismiss="modal">Annulla</button>
+                    <button type="button" class="btn btn-primary" onclick="saveDnsConfig()">Salva</button>
                 </div>
             </div>
         </div>

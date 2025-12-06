@@ -303,13 +303,18 @@ def update_instance_routes(instance_id: str, tunnel_mode: str, routes: List[Dict
         raise ValueError(f"Instance '{instance_id}' not found")
     
     # Update routes, tunnel mode, and DNS servers
-    old_routes = instance.routes.copy()
     instance.tunnel_mode = tunnel_mode
-    instance.routes = routes
+    
+    # If switching to Full Tunnel, clear custom routes to ensure data consistency
+    if tunnel_mode == "full":
+        instance.routes = []
+    else:
+        instance.routes = routes
+
     if dns_servers is not None:
         instance.dns_servers = dns_servers
     
-    logger.info(f"Tunnel mode: {tunnel_mode}, Routes count: {len(routes)}, DNS servers count: {len(instance.dns_servers)}")
+    logger.info(f"Updated instance {instance_id}: Mode={tunnel_mode}, Routes={len(instance.routes)}, DNS={len(instance.dns_servers)}")
     
     # Regenerate config file
     try:
