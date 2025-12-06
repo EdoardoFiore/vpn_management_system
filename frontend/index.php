@@ -166,8 +166,6 @@
                                         <div class="d-flex align-items-center mt-2 text-muted">
                                             <div id="current-instance-port" class="me-3"></div>
                                             <div id="current-instance-subnet" class="me-3"></div>
-                                            <div id="current-instance-dns-container" class="d-flex align-items-center">
-                                            </div>
                                         </div>
                                         <!-- View Mode -->
                                         <div id="routes-view-mode">

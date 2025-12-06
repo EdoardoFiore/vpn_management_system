@@ -303,6 +303,7 @@ def update_instance_routes(instance_id: str, tunnel_mode: str, routes: List[Dict
         raise ValueError(f"Instance '{instance_id}' not found")
     
     # Update routes, tunnel mode, and DNS servers
+    old_routes = instance.routes.copy() or [] # Ensure it's not None
     instance.tunnel_mode = tunnel_mode
     
     # If switching to Full Tunnel, clear custom routes to ensure data consistency

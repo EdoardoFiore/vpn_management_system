@@ -237,8 +237,17 @@ function openInstance(instance) {
     document.getElementById('instance-view').style.display = 'block';
 
     document.getElementById('current-instance-name').textContent = instance.name;
-    document.getElementById('current-instance-port').textContent = `Port: ${instance.port}`;
-    document.getElementById('current-instance-subnet').textContent = `Subnet: ${instance.subnet}`;
+    document.getElementById('current-instance-name').textContent = instance.name;
+
+    // Render Port Badge
+    document.getElementById('current-instance-port').innerHTML = `
+        <span class="badge" style="background: rgba(32, 107, 196, 0.2); color: white;">Port: ${instance.port}</span>
+    `;
+
+    // Render Subnet Badge
+    document.getElementById('current-instance-subnet').innerHTML = `
+        <span class="badge" style="background: rgba(32, 107, 196, 0.2); color: white;">Subnet: ${instance.subnet}</span>
+    `;
 
     // Render DNS Badge
     const dnsContainer = document.getElementById('current-instance-dns-container');
@@ -249,11 +258,8 @@ function openInstance(instance) {
         }
 
         dnsContainer.innerHTML = `
-            <span class="badge badge-outline text-blue ms-2" style="background: rgba(32, 107, 196, 0.1);">
-                DNS: ${dnsText}
-                <a href="#" class="ms-2 text-blue" onclick="openDnsEditModal(); return false;">
-                    <i class="ti ti-pencil"></i>
-                </a>
+            <span class="badge cursor-pointer" style="background: rgba(32, 107, 196, 0.2); color: white; cursor: pointer;" onclick="openDnsEditModal()">
+                DNS: ${dnsText} <i class="ti ti-pencil ms-2"></i>
             </span>
         `;
     }
