@@ -23,6 +23,7 @@ class Instance(BaseModel):
     tun_interface: str # e.g., "tun0", "tun1"
     tunnel_mode: str = "full"  # "full" or "split"
     routes: List[Dict[str, str]] = []  # List of {"network": "192.168.1.0/24", "interface": "eth1"}
+    dns_servers: List[str] = [] # List of DNS servers to push
     clients: List[str] = []  # List of client names associated with this instance
     status: str = "stopped" # stopped, running
 
@@ -157,7 +158,7 @@ def _is_service_active(instance: Instance) -> bool:
         return False
 
 def create_instance(name: str, port: int, subnet: str, protocol: str = "udp", 
-                   tunnel_mode: str = "full", routes: List[Dict[str, str]] = None) -> Instance:
+                   tunnel_mode: str = "full", routes: List[Dict[str, str]] = None, dns_servers: List[str] = None) -> Instance:
     """
     Creates a new OpenVPN instance.
     """
@@ -191,6 +192,8 @@ def create_instance(name: str, port: int, subnet: str, protocol: str = "udp",
     
     if routes is None:
         routes = []
+    if dns_servers is None:
+        dns_servers = []
     
     logger.info(f"Creating Instance object with id={instance_id}")
 
@@ -203,6 +206,7 @@ def create_instance(name: str, port: int, subnet: str, protocol: str = "udp",
         tun_interface=tun_interface,
         tunnel_mode=tunnel_mode,
         routes=routes,
+        dns_servers=dns_servers,
         status="stopped"
     )
     
@@ -281,9 +285,9 @@ def delete_instance(instance_id: str):
     instances = [i for i in instances if i.id != instance_id]
     _save_instances(instances)
 
-def update_instance_routes(instance_id: str, tunnel_mode: str, routes: List[Dict[str, str]]) -> Instance:
+def update_instance_routes(instance_id: str, tunnel_mode: str, routes: List[Dict[str, str]], dns_servers: List[str] = None) -> Instance:
     """
-    Updates the routes for an existing instance.
+    Updates the routes and DNS for an existing instance.
     Regenerates config and restarts the service.
     """
     logger.info(f"Updating routes for instance '{instance_id}'")
@@ -298,12 +302,14 @@ def update_instance_routes(instance_id: str, tunnel_mode: str, routes: List[Dict
     if not instance:
         raise ValueError(f"Instance '{instance_id}' not found")
     
-    # Update routes and tunnel mode
+    # Update routes, tunnel mode, and DNS servers
     old_routes = instance.routes.copy()
     instance.tunnel_mode = tunnel_mode
     instance.routes = routes
+    if dns_servers is not None:
+        instance.dns_servers = dns_servers
     
-    logger.info(f"Tunnel mode: {tunnel_mode}, Routes count: {len(routes)}")
+    logger.info(f"Tunnel mode: {tunnel_mode}, Routes count: {len(routes)}, DNS servers count: {len(instance.dns_servers)}")
     
     # Regenerate config file
     try:
@@ -448,9 +454,17 @@ def _generate_openvpn_config(instance: Instance):
     
     if instance.tunnel_mode == "full":
         config_lines.append('push "redirect-gateway def1 bypass-dhcp"')
+    
+    # DNS Configuration
+    if instance.dns_servers and len(instance.dns_servers) > 0:
+        for dns in instance.dns_servers:
+            config_lines.append(f'push "dhcp-option DNS {dns.strip()}"')
+    elif instance.tunnel_mode == "full":
+        # Fallback to Google DNS only for Full Tunnel if no custom DNS provided
         config_lines.append('push "dhcp-option DNS 8.8.8.8"')
         config_lines.append('push "dhcp-option DNS 8.8.4.4"')
-    elif instance.tunnel_mode == "split":
+
+    if instance.tunnel_mode == "split":
         # Add custom routes
         if instance.routes and len(instance.routes) > 0:
             for route in instance.routes:

@@ -29,6 +29,11 @@ function formatDateTime(isoString) {
     } catch (e) { return 'N/D'; }
 }
 
+function formatDnsList(dnsList) {
+    if (!dnsList || dnsList.length === 0) return 'Default (Google)';
+    return dnsList.join(', ');
+}
+
 // --- DASHBOARD FUNCTIONS ---
 
 async function loadInstances() {
@@ -151,6 +156,13 @@ async function createInstance() {
     const form = document.getElementById('createInstanceForm');
     const formData = new FormData(form);
 
+    // Parse DNS
+    const dnsInput = formData.get('dns_servers');
+    let dnsServers = [];
+    if (dnsInput && dnsInput.trim() !== '') {
+        dnsServers = dnsInput.split(',').map(s => s.trim()).filter(s => s !== '');
+    }
+
     // Gather routes if split tunnel
     const tunnelMode = formData.get('tunnel_mode');
     const routes = [];
@@ -177,7 +189,8 @@ async function createInstance() {
         subnet: formData.get('subnet'),
         protocol: 'udp',
         tunnel_mode: tunnelMode,
-        routes: routes
+        routes: routes,
+        dns_servers: dnsServers
     };
 
     try {
@@ -226,6 +239,20 @@ function openInstance(instance) {
     document.getElementById('current-instance-name').textContent = instance.name;
     document.getElementById('current-instance-port').textContent = `Port: ${instance.port}`;
     document.getElementById('current-instance-subnet').textContent = `Subnet: ${instance.subnet}`;
+
+    // Add DNS display if not exists (dynamic check or just append)
+    // For now, simpler to reuse subnet element or create new on fly if ID exists, 
+    // but better to assuming the HTML structure supports it.
+    // Let's assume user accepts not seeing it in the header for now, OR I inject it.
+    let dnsDisplay = document.getElementById('current-instance-dns');
+    if (!dnsDisplay) {
+        // Create if missing (quick hack to avoid modifying HTML structure too much)
+        const parent = document.getElementById('current-instance-subnet').parentNode; // The text-muted div
+        dnsDisplay = document.createElement('div');
+        dnsDisplay.id = 'current-instance-dns';
+        parent.appendChild(dnsDisplay);
+    }
+    dnsDisplay.textContent = `DNS: ${formatDnsList(instance.dns_servers)}`;
 
     fetchAndRenderClients();
     displayRoutes();
@@ -435,6 +462,15 @@ async function toggleRouteEdit() {
 
     // Pre-populate edit form
     document.getElementById('tunnel-mode-edit').value = currentInstance.tunnel_mode;
+
+    // Populate DNS
+    const dnsEdit = document.getElementById('dns-servers-edit');
+    if (currentInstance.dns_servers && Array.isArray(currentInstance.dns_servers)) {
+        dnsEdit.value = currentInstance.dns_servers.join(', ');
+    } else {
+        dnsEdit.value = '';
+    }
+
     toggleRouteConfigEdit();
 
     // Clear and populate routes
@@ -530,6 +566,12 @@ async function saveRoutes() {
     if (!currentInstance) return;
 
     const tunnelMode = document.getElementById('tunnel-mode-edit').value;
+    const dnsInput = document.getElementById('dns-servers-edit').value;
+    let dnsServers = [];
+    if (dnsInput && dnsInput.trim() !== '') {
+        dnsServers = dnsInput.split(',').map(s => s.trim()).filter(s => s !== '');
+    }
+
     const routes = [];
 
     // Gather routes
@@ -549,8 +591,10 @@ async function saveRoutes() {
     const payload = {
         action: 'update_instance_routes',
         instance_id: currentInstance.id,
+        instance_id: currentInstance.id,
         tunnel_mode: tunnelMode,
-        routes: routes
+        routes: routes,
+        dns_servers: dnsServers
     };
 
     try {
@@ -566,6 +610,12 @@ async function saveRoutes() {
             // Refresh instance data
             currentInstance.tunnel_mode = tunnelMode;
             currentInstance.routes = routes;
+            currentInstance.dns_servers = dnsServers;
+
+            // Update display
+            let dnsDisplay = document.getElementById('current-instance-dns');
+            if (dnsDisplay) dnsDisplay.textContent = `DNS: ${formatDnsList(dnsServers)}`;
+
             displayRoutes();
             cancelRouteEdit();
         } else {

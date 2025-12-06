@@ -177,6 +177,10 @@
                                         <!-- Edit Mode -->
                                         <div id="routes-edit-mode" style="display: none;">
                                             <div class="mb-3">
+                                                <label class="form-label">DNS Servers (Opzionale)</label>
+                                                <input type="text" class="form-control" id="dns-servers-edit" placeholder="Es: 192.168.178.242, 8.8.8.8">
+                                            </div>
+                                            <div class="mb-3">
                                                 <label class="form-label">Modalità Tunnel</label>
                                                 <select class="form-select" id="tunnel-mode-edit"
                                                     onchange="toggleRouteConfigEdit()">
@@ -236,6 +240,13 @@
                                     <input type="text" class="form-control" name="subnet" placeholder="10.8.0.0/24"
                                         required>
                                     <small class="form-hint">Deve essere una subnet privata unica.</small>
+                                </div>
+                            </div>
+                            <div class="col-md-12">
+                                <div class="mb-3">
+                                    <label class="form-label">DNS Servers (Opzionale)</label>
+                                    <input type="text" class="form-control" name="dns_servers" placeholder="Es: 192.168.178.242, 8.8.8.8">
+                                    <small class="form-hint">Lascia vuoto per usare i default (Google DNS per Full Tunnel).</small>
                                 </div>
                             </div>
                             <div class="col-md-12">

@@ -25,6 +25,7 @@ class RouteConfig(BaseModel):
 class RouteUpdateRequest(BaseModel):
     tunnel_mode: str = "full"  # "full" or "split"
     routes: List[RouteConfig] = []  # Custom routes for split tunnel
+    dns_servers: List[str] = [] # Optional custom DNS servers
 
 class InstanceRequest(BaseModel):
     name: str
@@ -33,6 +34,7 @@ class InstanceRequest(BaseModel):
     protocol: str = "udp"
     tunnel_mode: str = "full"  # "full" or "split"
     routes: List[RouteConfig] = []  # Custom routes for split tunnel
+    dns_servers: List[str] = [] # Optional custom DNS servers
 
 # --- Sicurezza con API Key ---
 API_KEY = os.getenv("API_KEY", "change-this-in-production")
@@ -82,7 +84,10 @@ async def create_instance(request: InstanceRequest):
             subnet=request.subnet,
             protocol=request.protocol,
             tunnel_mode=request.tunnel_mode,
-            routes=[route.dict() for route in request.routes]
+            protocol=request.protocol,
+            tunnel_mode=request.tunnel_mode,
+            routes=[route.dict() for route in request.routes],
+            dns_servers=request.dns_servers
         )
         return instance
     except ValueError as e:
@@ -106,7 +111,8 @@ def update_instance_routes(instance_id: str, request: RouteUpdateRequest, api_ke
         updated_instance = instance_manager.update_instance_routes(
             instance_id=instance_id,
             tunnel_mode=request.tunnel_mode,
-            routes=[route.dict() for route in request.routes]
+            routes=[route.dict() for route in request.routes],
+            dns_servers=request.dns_servers
         )
         return updated_instance
     except ValueError as e:
