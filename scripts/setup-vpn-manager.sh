@@ -115,17 +115,19 @@ chmod +x openvpn-install.sh
 # Esegue lo script in modalità non interattiva
 # NOTA: questo crea un primo utente chiamato 'test-client'
 log_info "Esecuzione dello script di installazione di OpenVPN in modalità non interattiva..."
-AUTO_INSTALL=y \
-  ENDPOINT="$PUBLIC_IP" \
-  APPROVE_INSTALL=y \
-  APPROVE_IP=y \
-  PORT_CHOICE=1      # Default: 1194
-PROTOCOL_CHOICE=1    # Default: UDP
-COMPRESSION_CHOICE=2 # Default: No
-DNS=1         # Use current system resolvers
-CLIENT="test-client" \
-  PASS=1 \
-  ./openvpn-install.sh
+export AUTO_INSTALL=y
+export APPROVE_INSTALL=y
+export APPROVE_IP=y
+export IPV6_SUPPORT=n
+export PORT_CHOICE=1
+export PROTOCOL_CHOICE=1
+export DNS=1
+export COMPRESSION_ENABLED=n
+export CUSTOMIZE_ENC=n
+export CLIENT=test-client
+export PASS=1
+
+./openvpn-install.sh
 
 if [[ ! -f /etc/openvpn/server.conf ]]; then
   log_error "L'installazione di OpenVPN sembra essere fallita (file di configurazione non trovato)."
