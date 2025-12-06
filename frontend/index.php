@@ -326,9 +326,9 @@
 
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/@tabler/core@1.4.0/dist/js/tabler.min.js"></script>
-    <scriptsrc="js/app.js"></script>
+    <script src="js/app.js"></script>
     <script>
-       // Any tiny initialization if strictly needed, otherwise empty
+        // Any tiny initialization if strictly needed, otherwise empty
     </script>
 </body>
 
