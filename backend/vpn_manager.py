@@ -95,30 +95,25 @@ def _get_connected_clients(instance_name: str):
         with open(status_log_path, "r") as f:
             lines = f.readlines()
             
-        client_section_start = -1
-        for i, line in enumerate(lines):
-            if "ROUTING TABLE" in line:
-                client_section_start = i + 1
-                break
-        
-        if client_section_start != -1:
-            for line in lines[client_section_start:]:
-                if "CLIENT_LIST" not in line:
-                    continue
-                parts = line.strip().split(',')
-                # CLIENT_LIST,Common Name,Real Address,Virtual Address,Bytes Received,Bytes Sent,Connected Since
-                if len(parts) > 6:
+        for line in lines:
+            line = line.strip()
+            if line.startswith("CLIENT_LIST,"):
+                parts = line.split(',')
+                # status-version 2 format:
+                # CLIENT_LIST,Common Name,Real Address,Virtual Address,Bytes Received,Bytes Sent,Connected Since,...
+                if len(parts) > 3:
                     client_name = parts[1]
-                    connected_since_str = parts[6]
-                    try:
-                        connected_since_dt = datetime.strptime(connected_since_str, "%a %b %d %H:%M:%S %Y")
-                        connected_since = connected_since_dt.isoformat()
-                    except ValueError:
-                        connected_since = connected_since_str
+                    real_address = parts[2]
+                    virtual_address = parts[3]
+                    connected_since = parts[6] if len(parts) > 6 else "Unknown"
+
+                    # Handle case where real address has port
+                    if ":" in real_address:
+                        real_address = real_address.split(":")[0]
 
                     connected_clients[client_name] = {
-                        "virtual_ip": parts[3],
-                        "real_ip": parts[2].split(":")[0],
+                        "virtual_ip": virtual_address,
+                        "real_ip": real_address,
                         "connected_since": connected_since
                     }
     except Exception as e:

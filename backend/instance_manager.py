@@ -506,6 +506,7 @@ def _generate_openvpn_config(instance: Instance):
         "",
         "# Logging",
         f"status {log_dir}/status_{instance.name}.log",
+        "status-version 2",
         "verb 3",
     ])
     
