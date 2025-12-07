@@ -97,7 +97,10 @@ async function fetchAndRenderClients() {
                                     ${displayName}
                                 </div>
                             </td>
-                            <td>${client.real_ip || '-'}</td>
+                            <td>
+                                <div>${client.real_ip || '-'}</div>
+                                <div class="small text-muted">VPN: ${client.virtual_ip || '-'}</div>
+                            </td>
                             <td class="text-muted">
                                 <div><i class="ti ti-arrow-down icon-sm text-green"></i> ${formatBytes(client.bytes_received)}</div>
                                 <div><i class="ti ti-arrow-up icon-sm text-blue"></i> ${formatBytes(client.bytes_sent)}</div>

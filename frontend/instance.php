@@ -92,7 +92,7 @@ require_once 'includes/header.php';
                     <thead>
                         <tr>
                             <th>Client</th>
-                            <th>IP Reale</th>
+                            <th>Indirizzi IP</th>
                             <th>Traffico</th>
                             <th>Connesso da</th>
                             <th class="w-1"></th>

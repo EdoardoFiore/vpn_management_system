@@ -37,7 +37,13 @@ function formatDateTime(isoString) {
     // Remove nanoseconds if present to ensure compatibility
     const cleanIso = isoString.split('.')[0];
     const date = new Date(cleanIso);
-    return date.toLocaleString();
+    return date.toLocaleString(undefined, {
+        year: 'numeric',
+        month: '2-digit',
+        day: '2-digit',
+        hour: '2-digit',
+        minute: '2-digit'
+    });
 }
 
 function formatBytes(bytes, decimals = 2) {

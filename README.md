@@ -27,7 +27,7 @@ L'installazione è progettata per essere "Zero Config": cloni la repository, lan
     Accedi al tuo server e clona la repository:
     ```bash
     git clone https://github.com/EdoardoFiore/VPNManager.git
-    cd vpn_management_system/scripts
+    cd VPNManager/scripts
     ```
 
 2.  **Avvia l'Installazione**
