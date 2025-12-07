@@ -95,6 +95,26 @@ function toggleRouteConfig() {
     } else {
         routesConfig.style.display = 'none';
     }
+
+    // Toggle DNS Input visibility robustly
+    // We assume the input is inside a col-md-12 or similar container
+    const dnsInput = document.querySelector('input[name="dns_servers"]');
+    if (dnsInput) {
+        // Traverse up to find the column container to hide/show
+        const container = dnsInput.closest('.col-md-12') || dnsInput.closest('.mb-3').parentNode;
+        if (container) {
+            if (tunnelMode === 'full') {
+                container.style.display = 'block';
+                // Enable input to ensure it's submitted
+                dnsInput.disabled = false;
+            } else {
+                container.style.display = 'none';
+                // Disable input to prevent submission of hidden values (though backend handles it too)
+                dnsInput.disabled = true;
+                dnsInput.value = ''; // Clear value
+            }
+        }
+    }
 }
 
 function addRoute() {
@@ -239,29 +259,21 @@ function openInstance(instance) {
     document.getElementById('current-instance-name').textContent = instance.name;
     document.getElementById('current-instance-name').textContent = instance.name;
 
-    // Render Port Badge
+    // Render Port Badge (Soft Color: Blue Lt)
     document.getElementById('current-instance-port').innerHTML = `
-        <span class="badge" style="background: rgba(32, 107, 196, 0.2); color: white;">Port: ${instance.port}</span>
+        <span class="badge bg-blue-lt">Port: ${instance.port}</span>
     `;
 
-    // Render Subnet Badge
+    // Render Subnet Badge (Soft Color: Green Lt)
     document.getElementById('current-instance-subnet').innerHTML = `
-        <span class="badge" style="background: rgba(32, 107, 196, 0.2); color: white;">Subnet: ${instance.subnet}</span>
+        <span class="badge bg-green-lt">Subnet: ${instance.subnet}</span>
     `;
 
-    // Render DNS Badge
+    // Remove DNS Badge from Header (handled in Routes card now)
     const dnsContainer = document.getElementById('current-instance-dns-container');
     if (dnsContainer) {
-        let dnsText = 'Default DNS';
-        if (instance.dns_servers && instance.dns_servers.length > 0) {
-            dnsText = instance.dns_servers.join(', ');
-        }
-
-        dnsContainer.innerHTML = `
-            <span class="badge cursor-pointer" style="background: rgba(32, 107, 196, 0.2); color: white; cursor: pointer;" onclick="openDnsEditModal()">
-                DNS: ${dnsText} <i class="ti ti-pencil ms-2"></i>
-            </span>
-        `;
+        dnsContainer.style.display = 'none';
+        dnsContainer.innerHTML = '';
     }
 
     fetchAndRenderClients();
@@ -495,29 +507,58 @@ function displayRoutes() {
     tunnelModeDisplay.textContent = currentInstance.tunnel_mode === 'full' ? 'Full Tunnel' : 'Split Tunnel';
     tunnelModeDisplay.className = `badge bg-${currentInstance.tunnel_mode === 'full' ? 'primary' : 'warning'} ms-2`;
 
-    // Display routes list
-    const routesList = document.getElementById('routes-list');
-    if (!currentInstance.routes || currentInstance.routes.length === 0) {
-        routesList.innerHTML = '<p class="text-muted mt-2">Nessuna rotta personalizzata</p>';
+    const list = document.getElementById('routes-list');
+    const dnsViewContainer = document.getElementById('dns-view-container');
+    const currentDnsDisplay = document.getElementById('current-dns-display');
+
+    list.innerHTML = '';
+
+    if (!currentInstance) return;
+
+    // DNS Display Logic
+    if (currentInstance.tunnel_mode === 'full') {
+        if (dnsViewContainer) {
+            dnsViewContainer.style.display = 'block';
+            let dnsText = 'Default (Google)';
+            if (currentInstance.dns_servers && currentInstance.dns_servers.length > 0) {
+                dnsText = currentInstance.dns_servers.join(', ');
+            }
+            currentDnsDisplay.textContent = dnsText;
+        }
     } else {
-        let html = '<div class="list-group list-group-flush mt-2">';
-        currentInstance.routes.forEach(route => {
-            html += `
-                <div class="list-group-item">
-                    <div class="row align-items-center">
-                        <div class="col-auto">
-                            <i class="ti ti-route text-muted"></i>
-                        </div>
-                        <div class="col">
-                            <strong>${route.network}</strong>
-                            <div class="text-muted small">via ${route.interface}</div>
+        if (dnsViewContainer) dnsViewContainer.style.display = 'none';
+    }
+
+    // Routes Display Logic
+    if (currentInstance.tunnel_mode === 'full') {
+        list.innerHTML = `
+            <div class="list-group-item">
+                <div class="d-flex w-100 justify-content-between">
+                    <h5 class="mb-1">Full Tunnel</h5>
+                </div>
+                <p class="mb-1 text-muted">Tutto il traffico passa attraverso la VPN.</p>
+            </div>
+        `;
+    } else {
+        if (currentInstance.routes && currentInstance.routes.length > 0) {
+            currentInstance.routes.forEach(route => {
+                list.innerHTML += `
+                    <div class="list-group-item">
+                        <div class="row align-items-center">
+                            <div class="col-auto">
+                                <span class="badge bg-blue"></span>
+                            </div>
+                            <div class="col">
+                                <span class="text-body d-block">${route.network}</span>
+                                <small class="text-muted d-block">via ${route.interface}</small>
+                            </div>
                         </div>
                     </div>
-                </div>
-            `;
-        });
-        html += '</div>';
-        routesList.innerHTML = html;
+                `;
+            });
+        } else {
+            list.innerHTML = `<div class="p-3 text-muted text-center">Nessuna rotta personalizzata configurata.</div>`;
+        }
     }
 }
 
@@ -528,35 +569,66 @@ async function toggleRouteEdit() {
     viewMode.style.display = 'none';
     editMode.style.display = 'block';
 
-    // Pre-populate edit form
+    if (!currentInstance) return;
+
+    // Set Tunnel Mode
     document.getElementById('tunnel-mode-edit').value = currentInstance.tunnel_mode;
 
-    toggleRouteConfigEdit();
-
-    // Clear and populate routes
+    // Populate DNS Edit
     const container = document.getElementById('routes-edit-container');
-    container.innerHTML = '';
-    editRouteCounter = 0;
 
-    if (currentInstance.routes && currentInstance.routes.length > 0) {
-        for (const route of currentInstance.routes) {
-            await addRouteEdit(route.network, route.interface);
+    // Insert DNS Input at the top of the container
+    // We re-render the edit container
+    renderRouteEditContainer();
+}
+
+function renderRouteEditContainer() {
+    const container = document.getElementById('routes-edit-container');
+    const tunnelMode = document.getElementById('tunnel-mode-edit').value;
+
+    container.innerHTML = '';
+    editRouteCounter = 0; // Reset counter when re-rendering
+
+    // 1. DNS Input (Only for Full Tunnel)
+    if (tunnelMode === 'full') {
+        let dnsValue = '';
+        if (currentInstance.dns_servers && currentInstance.dns_servers.length > 0) {
+            dnsValue = currentInstance.dns_servers.join(', ');
         }
+
+        container.innerHTML += `
+            <div class="mb-3">
+                <label class="form-label">DNS Servers</label>
+                <input type="text" class="form-control" id="dns-servers-edit-input" value="${dnsValue}" placeholder="Es: 1.1.1.1, 8.8.8.8">
+                <small class="form-hint">Lascia vuoto per usare i default (Google).</small>
+            </div>
+        `;
+    }
+
+    // 2. Routes (Only for Split Tunnel)
+    if (tunnelMode === 'split') {
+        // Re-use currentInstance routes if switching back to split, OR keep existing inputs if just toggled?
+        // Simpler: Just render usage of existing routes
+        if (currentInstance.routes && currentInstance.routes.length > 0) {
+            currentInstance.routes.forEach((route, index) => {
+                addRouteEdit(route.network, route.interface);
+            });
+        } else {
+            // Add one empty if none
+            if (container.querySelectorAll('[data-edit-route-network]').length === 0) {
+                addRouteEdit();
+            }
+        }
+    }
+    // Update visibility of the "Add Route" button
+    const addBtn = document.querySelector('button[onclick="addRouteEdit()"]');
+    if (addBtn) {
+        addBtn.style.display = (tunnelMode === 'split') ? 'inline-block' : 'none';
     }
 }
 
 function toggleRouteConfigEdit() {
-    const tunnelMode = document.getElementById('tunnel-mode-edit').value;
-    const container = document.getElementById('routes-edit-container');
-    const addBtn = document.querySelector('button[onclick="addRouteEdit()"]');
-
-    if (tunnelMode === 'split') {
-        container.style.display = 'block';
-        if (addBtn) addBtn.style.display = 'inline-block';
-    } else {
-        container.style.display = 'none';
-        if (addBtn) addBtn.style.display = 'none';
-    }
+    renderRouteEditContainer();
 }
 
 function cancelRouteEdit() {
@@ -626,30 +698,39 @@ async function saveRoutes() {
     if (!currentInstance) return;
 
     const tunnelMode = document.getElementById('tunnel-mode-edit').value;
-    // DNS is handled separately now
+
+    // 1. Capture DNS if Full Tunnel
+    let dnsServers = [];
+    if (tunnelMode === 'full') {
+        const dnsInput = document.getElementById('dns-servers-edit-input');
+        if (dnsInput && dnsInput.value.trim() !== '') {
+            dnsServers = dnsInput.value.split(',').map(s => s.trim()).filter(s => s !== '');
+        }
+    }
 
     const routes = [];
 
-    // Gather routes
-    const routeNetworks = document.querySelectorAll('[data-edit-route-network]');
-    routeNetworks.forEach(input => {
-        const routeId = input.getAttribute('data-edit-route-network');
-        const network = input.value.trim();
-        const interfaceSelect = document.querySelector(`[data-edit-route-interface="${routeId}"]`);
-        const interfaceName = interfaceSelect ? interfaceSelect.value : '';
+    // 2. Capture Routes if Split Tunnel
+    if (tunnelMode === 'split') {
+        const routeNetworks = document.querySelectorAll('[data-edit-route-network]');
+        routeNetworks.forEach(input => {
+            const routeId = input.getAttribute('data-edit-route-network');
+            const network = input.value.trim();
+            const interfaceSelect = document.querySelector(`[data-edit-route-interface="${routeId}"]`);
+            const interfaceName = interfaceSelect ? interfaceSelect.value : '';
 
-        if (network && interfaceName) {
-            routes.push({ network, interface: interfaceName });
-        }
-    });
+            if (network && interfaceName) {
+                routes.push({ network, interface: interfaceName });
+            }
+        });
+    }
 
-    // Send update
     const payload = {
         action: 'update_instance_routes',
         instance_id: currentInstance.id,
         tunnel_mode: tunnelMode,
         routes: routes,
-        dns_servers: currentInstance.dns_servers // Preserve existing DNS
+        dns_servers: dnsServers
     };
 
     try {

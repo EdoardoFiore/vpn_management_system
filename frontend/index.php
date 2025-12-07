@@ -71,7 +71,7 @@
                             <div class="d-flex align-items-center">
                                 <span id="current-instance-port" class="me-2"></span>
                                 <span id="current-instance-subnet" class="me-2"></span>
-                                <span id="current-instance-dns-container" class="me-2" style="display:none;"></span>
+                                <span id="current-instance-dns-container" style="display:none;"></span> <!-- Removed from header -->
                                 <button class="btn btn-danger btn-sm btn-icon" onclick="deleteInstancePrompt()">
                                     <i class="ti ti-trash"></i>
                                 </button>
@@ -156,7 +156,7 @@
                             <div class="col-md-6">
                                 <div class="card">
                                     <div class="card-header">
-                                        <h3 class="card-title">Rotte Personalizzate</h3>
+                                        <h3 class="card-title">Rotte e DNS Personalizzati</h3>
                                         <div class="card-actions">
                                             <button class="btn btn-sm btn-primary" onclick="toggleRouteEdit()">
                                                 <i class="ti ti-edit"></i> Modifica
@@ -188,6 +188,10 @@
                                                     <option value="full">Full Tunnel</option>
                                                     <option value="split">Split Tunnel</option>
                                                 </select>
+                                            </div>
+                                            <!-- DNS Display (moved here) -->
+                                            <div id="dns-view-container" class="mb-3" style="display: none;">
+                                                <strong>DNS Servers:</strong> <span id="current-dns-display" class="text-muted">Default</span>
                                             </div>
                                             <div id="routes-edit-container"></div>
                                             <button type="button" class="btn btn-sm btn-outline-primary mb-3"
