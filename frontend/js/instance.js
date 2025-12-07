@@ -79,12 +79,14 @@ async function fetchAndRenderClients() {
                         <tr>
                             <td>${displayName}</td>
                             <td>
-                                <button class="btn btn-primary btn-sm btn-icon" onclick="downloadClient('${fullName}')">
-                                    <i class="ti ti-download"></i>
-                                </button>
-                                <button class="btn btn-danger btn-sm btn-icon" onclick="revokeClient('${fullName}')">
-                                    <i class="ti ti-trash"></i>
-                                </button>
+                                <div class="d-flex gap-2">
+                                    <button class="btn btn-primary btn-sm btn-icon" onclick="downloadClient('${fullName}')" title="Scarica Configurazione">
+                                        <i class="ti ti-download"></i>
+                                    </button>
+                                    <button class="btn btn-danger btn-sm btn-icon" onclick="revokeClient('${fullName}')" title="Revoca Client">
+                                        <i class="ti ti-trash"></i>
+                                    </button>
+                                </div>
                             </td>
                         </tr>
                     `;

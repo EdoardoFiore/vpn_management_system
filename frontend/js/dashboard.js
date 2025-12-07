@@ -61,7 +61,9 @@ function toggleRouteConfig() {
 
     const dnsInput = document.querySelector('input[name="dns_servers"]');
     if (dnsInput) {
-        const container = dnsInput.closest('.col-md-12') || dnsInput.closest('.mb-3').parentNode;
+        // Find the specific parent div for the DNS input group
+        // In index.php it's a div.mb-3 directly containing the label and input
+        const container = dnsInput.closest('.mb-3');
         if (container) {
             if (tunnelMode === 'full') {
                 container.style.display = 'block';

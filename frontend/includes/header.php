@@ -22,6 +22,32 @@
         .cursor-pointer {
             cursor: pointer;
         }
+
+        /* 1. Card Hover Effect */
+        .instance-card {
+            transition: transform 0.2s ease, box-shadow 0.2s ease;
+        }
+
+        .instance-card:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 10px 20px rgba(0, 0, 0, 0.1) !important;
+        }
+
+        /* 2. Wider Layout (Less "Claustrophobic") */
+        @media (min-width: 1200px) {
+            .container-xl {
+                max-width: 1300px;
+            }
+        }
+
+        /* 3. Notification Styles (Left Border) */
+        .alert-success {
+            border-left: 5px solid #2fb344 !important;
+        }
+
+        .alert-danger {
+            border-left: 5px solid #d63939 !important;
+        }
     </style>
 </head>
 
