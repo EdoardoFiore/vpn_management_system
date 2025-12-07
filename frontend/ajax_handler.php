@@ -44,7 +44,8 @@ switch ($action) {
             $data['subnet'],
             $data['protocol'] ?? 'udp',
             $data['tunnel_mode'] ?? 'full',
-            $data['routes'] ?? []
+            $data['routes'] ?? [],
+            $data['dns_servers'] ?? []
         );
         echo json_encode($response);
         break;
@@ -72,7 +73,8 @@ switch ($action) {
         $response = update_instance_routes(
             $data['instance_id'],
             $data['tunnel_mode'] ?? 'full',
-            $data['routes'] ?? []
+            $data['routes'] ?? [],
+            $data['dns_servers'] ?? []
         );
         echo json_encode($response);
         break;

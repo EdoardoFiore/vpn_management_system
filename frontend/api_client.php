@@ -72,7 +72,7 @@ function get_instances()
     return api_request('/instances');
 }
 
-function create_instance($name, $port, $subnet, $protocol, $tunnel_mode = 'full', $routes = [])
+function create_instance($name, $port, $subnet, $protocol, $tunnel_mode = 'full', $routes = [], $dns_servers = [])
 {
     return api_request('/instances', 'POST', [
         'name' => $name,
@@ -80,7 +80,8 @@ function create_instance($name, $port, $subnet, $protocol, $tunnel_mode = 'full'
         'subnet' => $subnet,
         'protocol' => $protocol,
         'tunnel_mode' => $tunnel_mode,
-        'routes' => $routes
+        'routes' => $routes,
+        'dns_servers' => $dns_servers
     ]);
 }
 
@@ -89,11 +90,12 @@ function delete_instance($instance_id)
     return api_request("/instances/$instance_id", 'DELETE');
 }
 
-function update_instance_routes($instance_id, $tunnel_mode, $routes)
+function update_instance_routes($instance_id, $tunnel_mode, $routes, $dns_servers = [])
 {
     return api_request("/instances/$instance_id/routes", 'PATCH', [
         'tunnel_mode' => $tunnel_mode,
-        'routes' => $routes
+        'routes' => $routes,
+        'dns_servers' => $dns_servers
     ]);
 }
 

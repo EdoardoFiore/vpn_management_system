@@ -68,11 +68,12 @@
 
                         <div class="d-flex justify-content-between align-items-center mb-3">
                             <h2 id="current-instance-name">Dettagli Istanza</h2>
-                            <div>
-                                <span class="badge bg-blue" id="current-instance-port"></span>
-                                <span class="badge bg-green" id="current-instance-subnet"></span>
-                                <button class="btn btn-danger btn-sm ms-3" onclick="deleteInstancePrompt()">
-                                    <i class="ti ti-trash"></i> Elimina Istanza
+                            <div class="d-flex align-items-center">
+                                <span id="current-instance-port" class="me-2"></span>
+                                <span id="current-instance-subnet" class="me-2"></span>
+                                <span id="current-instance-dns-container" class="me-2" style="display:none;"></span>
+                                <button class="btn btn-danger btn-sm btn-icon" onclick="deleteInstancePrompt()">
+                                    <i class="ti ti-trash"></i>
                                 </button>
                             </div>
                         </div>
