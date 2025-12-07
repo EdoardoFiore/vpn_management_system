@@ -49,7 +49,7 @@ La porta `80` (TCP) deve essere sempre accessibile per l'interfaccia web.
 
     Connettiti via SSH alla tua VM Ubuntu e clona questa repository:
     ```bash
-    git clone https://github.com/EdoardoFiore/vpn_management_system.git
+    git clone https://github.com/EdoardoFiore/VPNManager.git
     ```
 
 2.  **Esegui lo Script di Installazione**
