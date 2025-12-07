@@ -188,6 +188,15 @@ def revoke_client(instance_id: str, client_name: str) -> Tuple[bool, str]:
     out, code = _run_command(cmd, env_vars={"EASYRSA_CRL_DAYS": "3650"})
     if code != 0:
         return False, f"CRL Gen Error: {out}"
+
+    # Copy CRL to OpenVPN directory
+    try:
+        crl_src = os.path.join(EASYRSA_DIR, "pki/crl.pem")
+        crl_dest = "/etc/openvpn/crl.pem"
+        subprocess.run(["cp", crl_src, crl_dest], check=True)
+        os.chmod(crl_dest, 0o644)
+    except Exception as e:
+         return False, f"Error copying CRL: {e}"
     
     # 3. Remove client from instance's client list
     try:
