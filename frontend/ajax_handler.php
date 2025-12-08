@@ -138,6 +138,11 @@ switch ($action) {
         echo json_encode($response);
         break;
 
+    case 'get_top_clients':
+        $response = get_top_clients();
+        echo json_encode($response);
+        break;
+
     default:
         echo json_encode(['success' => false, 'body' => ['detail' => 'Azione non riconosciuta.']]);
         break;

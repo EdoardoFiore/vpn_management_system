@@ -127,4 +127,9 @@ function revoke_client($instance_id, $client_name)
 {
     return api_request('/instances/' . urlencode($instance_id) . '/clients/' . urlencode($client_name), 'DELETE');
 }
+
+function get_top_clients()
+{
+    return api_request('/stats/top-clients');
+}
 ?>
