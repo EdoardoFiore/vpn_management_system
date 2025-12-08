@@ -5,6 +5,7 @@ from datetime import datetime
 from typing import List, Dict, Tuple, Optional
 from dotenv import load_dotenv
 import instance_manager
+import firewall_manager
 
 load_dotenv()
 logger = logging.getLogger(__name__)
@@ -203,8 +204,14 @@ def revoke_client(instance_id: str, client_name: str) -> Tuple[bool, str]:
         instance_manager.remove_client_from_instance(instance_id, client_name)
     except Exception as e:
         logger.error(f"Failed to remove client from instance: {e}")
+        
+    # 4. Remove from firewall groups
+    try:
+        firewall_manager.remove_client_from_all_groups(instance.name, client_name)
+    except Exception as e:
+        logger.error(f"Failed to remove client from firewall groups: {e}")
     
-    # 4. Restart Service to reload CRL
+    # 5. Restart Service to reload CRL
     service_name = f"openvpn@server_{instance.name}"
     subprocess.run(["/usr/bin/systemctl", "restart", service_name], check=False)
 

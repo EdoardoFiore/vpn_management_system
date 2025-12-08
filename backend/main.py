@@ -10,6 +10,33 @@ from pydantic import BaseModel
 import vpn_manager
 import instance_manager
 import network_utils
+import firewall_manager
+from typing import Optional, Dict
+
+# --- Modelli Pydantic ---
+class ClientRequest(BaseModel):
+    client_name: str
+
+class GroupRequest(BaseModel):
+    name: str
+    description: str = ""
+
+class GroupMemberRequest(BaseModel):
+    client_identifier: str # e.g. "instance_clientname"
+    subnet_info: Dict[str, str]
+
+class RuleRequest(BaseModel):
+    group_id: str
+    action: str
+    protocol: str
+    port: Optional[str] = None
+    destination: str
+    description: str = ""
+    order: Optional[int] = None
+
+class RuleOrderRequest(BaseModel):
+    id: str
+    order: int
 
 # Regex per validare i nomi dei client (permette alfanumerici, underscore, trattini e punti)
 CLIENT_NAME_PATTERN = r"^[a-zA-Z0-9_.-]+$"
@@ -234,6 +261,68 @@ async def revoke_client(instance_id: str, client_name: str):
         raise HTTPException(status_code=500, detail=message)
 
     return {"message": message}
+
+
+# --- Endpoints Gruppi e Firewall ---
+
+@app.get("/api/groups", dependencies=[Depends(get_api_key)])
+async def list_groups():
+    return firewall_manager.get_groups()
+
+@app.post("/api/groups", dependencies=[Depends(get_api_key)])
+async def create_group(request: GroupRequest):
+    try:
+        return firewall_manager.create_group(request.name, request.description)
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+@app.delete("/api/groups/{group_id}", dependencies=[Depends(get_api_key)])
+async def delete_group(group_id: str):
+    firewall_manager.delete_group(group_id)
+    return {"success": True}
+
+@app.post("/api/groups/{group_id}/members", dependencies=[Depends(get_api_key)])
+async def add_group_member(group_id: str, request: GroupMemberRequest):
+    try:
+        firewall_manager.add_member_to_group(group_id, request.client_identifier, request.subnet_info)
+        return {"success": True}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.delete("/api/groups/{group_id}/members/{client_identifier}", dependencies=[Depends(get_api_key)])
+async def remove_group_member(group_id: str, client_identifier: str, instance_name: str):
+    try:
+        firewall_manager.remove_member_from_group(group_id, client_identifier, instance_name)
+        return {"success": True}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+# --- Endpoints Firewall Rules ---
+
+@app.get("/api/firewall/rules", dependencies=[Depends(get_api_key)])
+async def list_rules(group_id: Optional[str] = None):
+    return firewall_manager.get_rules(group_id)
+
+@app.post("/api/firewall/rules", dependencies=[Depends(get_api_key)])
+async def create_rule(request: RuleRequest):
+    try:
+        return firewall_manager.add_rule(request.dict())
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.delete("/api/firewall/rules/{rule_id}", dependencies=[Depends(get_api_key)])
+async def delete_rule(rule_id: str):
+    firewall_manager.delete_rule(rule_id)
+    return {"success": True}
+
+@app.post("/api/firewall/rules/order", dependencies=[Depends(get_api_key)])
+async def reorder_rules(orders: List[RuleOrderRequest]):
+    try:
+        data = [{"id": x.id, "order": x.order} for x in orders]
+        firewall_manager.update_rule_order(data)
+        return {"success": True}
+    except Exception as e:
+         raise HTTPException(status_code=500, detail=str(e))
 
 @app.get("/")
 async def root():

@@ -132,4 +132,63 @@ function get_top_clients()
 {
     return api_request('/stats/top-clients');
 }
+
+// --- Groups & Firewall Functions ---
+
+function get_groups() {
+    return api_request('/groups');
+}
+
+function create_group($name, $description) {
+    return api_request('/groups', 'POST', ['name' => $name, 'description' => $description]);
+}
+
+function delete_group($group_id) {
+    return api_request('/groups/' . urlencode($group_id), 'DELETE');
+}
+
+function add_group_member($group_id, $client_identifier, $subnet_info) {
+    return api_request('/groups/' . urlencode($group_id) . '/members', 'POST', [
+        'client_identifier' => $client_identifier,
+        'subnet_info' => $subnet_info
+    ]);
+}
+
+function remove_group_member($group_id, $client_identifier, $instance_name) {
+    // Note: The backend endpoint expects parameters, but DELETE usually doesn't have body.
+    // The backend route is /groups/{group_id}/members/{client_identifier}?instance_name=...
+    // Actually in main.py: @app.delete("/api/groups/{group_id}/members/{client_identifier}")
+    // with query param instance_name.
+    // api_request supports adding query params to endpoint string.
+    return api_request('/groups/' . urlencode($group_id) . '/members/' . urlencode($client_identifier) . '?instance_name=' . urlencode($instance_name), 'DELETE');
+}
+
+function get_rules($group_id = null) {
+    $url = '/firewall/rules';
+    if ($group_id) {
+        $url .= '?group_id=' . urlencode($group_id);
+    }
+    return api_request($url);
+}
+
+// Helper to create rule
+function create_rule($group_id, $action, $protocol, $destination, $port = null, $description = '', $order = null) {
+    return api_request('/firewall/rules', 'POST', [
+        'group_id' => $group_id,
+        'action' => $action,
+        'protocol' => $protocol,
+        'port' => $port,
+        'destination' => $destination,
+        'description' => $description,
+        'order' => $order
+    ]);
+}
+
+function delete_rule($rule_id) {
+    return api_request('/firewall/rules/' . urlencode($rule_id), 'DELETE');
+}
+
+function reorder_rules($orders) {
+    return api_request('/firewall/rules/order', 'POST', $orders);
+}
 ?>

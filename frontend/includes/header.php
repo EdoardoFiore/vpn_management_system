@@ -59,11 +59,29 @@
                 <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar-menu">
                     <span class="navbar-toggler-icon"></span>
                 </button>
-                <h1 class="navbar-brand navbar-brand-autodark d-none-navbar-horizontal pe-0 pe-md-3">
-                    <a href="index.php">
-                        <i class="ti ti-brand-openvpn me-2"></i> VPN Manager
-                    </a>
                 </h1>
+                <div class="collapse navbar-collapse" id="navbar-menu">
+                    <div class="d-flex flex-column flex-md-row flex-fill align-items-stretch align-items-md-center">
+                        <ul class="navbar-nav">
+                            <li class="nav-item">
+                                <a class="nav-link" href="index.php">
+                                    <span class="nav-link-icon d-md-none d-lg-inline-block">
+                                        <i class="ti ti-home"></i>
+                                    </span>
+                                    <span class="nav-link-title">Dashboard</span>
+                                </a>
+                            </li>
+                            <li class="nav-item">
+                                <a class="nav-link" href="firewall.php">
+                                    <span class="nav-link-icon d-md-none d-lg-inline-block">
+                                        <i class="ti ti-shield-lock"></i>
+                                    </span>
+                                    <span class="nav-link-title">Firewall / ACL</span>
+                                </a>
+                            </li>
+                        </ul>
+                    </div>
+                </div>
                 <div class="navbar-nav flex-row order-md-last">
                     <div class="nav-item">
                         <a href="https://github.com/edoardofiore/vpn_management_system" target="_blank"

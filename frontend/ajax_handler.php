@@ -143,6 +143,103 @@ switch ($action) {
         echo json_encode($response);
         break;
 
+    // --- Groups & Rules Cases ---
+
+    case 'get_groups':
+        $response = get_groups();
+        echo json_encode($response);
+        break;
+
+    case 'create_group':
+        $input = file_get_contents('php://input');
+        $data = json_decode($input, true);
+        if (!$data || !isset($data['name'])) {
+             echo json_encode(['success' => false, 'body' => ['detail' => 'Dati mancanti.']]);
+             exit;
+        }
+        $response = create_group($data['name'], $data['description'] ?? '');
+        echo json_encode($response);
+        break;
+
+    case 'delete_group':
+        $group_id = $_POST['group_id'] ?? '';
+        if (empty($group_id)) {
+             echo json_encode(['success' => false, 'body' => ['detail' => 'ID gruppo mancante.']]);
+             exit;
+        }
+        $response = delete_group($group_id);
+        echo json_encode($response);
+        break;
+
+    case 'add_group_member':
+        $input = file_get_contents('php://input');
+        $data = json_decode($input, true);
+        if (!$data || !isset($data['group_id']) || !isset($data['client_identifier']) || !isset($data['subnet_info'])) {
+             echo json_encode(['success' => false, 'body' => ['detail' => 'Dati mancanti.']]);
+             exit;
+        }
+        $response = add_group_member($data['group_id'], $data['client_identifier'], $data['subnet_info']);
+        echo json_encode($response);
+        break;
+
+    case 'remove_group_member':
+        $input = file_get_contents('php://input');
+        $data = json_decode($input, true);
+        if (!$data || !isset($data['group_id']) || !isset($data['client_identifier']) || !isset($data['instance_name'])) {
+             echo json_encode(['success' => false, 'body' => ['detail' => 'Dati mancanti.']]);
+             exit;
+        }
+        $response = remove_group_member($data['group_id'], $data['client_identifier'], $data['instance_name']);
+        echo json_encode($response);
+        break;
+
+    case 'get_rules':
+        $group_id = $_GET['group_id'] ?? null;
+        $response = get_rules($group_id);
+        echo json_encode($response);
+        break;
+        
+    case 'create_rule':
+        $input = file_get_contents('php://input');
+        $data = json_decode($input, true);
+        // Validazione minima
+        if (!$data || !isset($data['group_id']) || !isset($data['action']) || !isset($data['destination'])) {
+             echo json_encode(['success' => false, 'body' => ['detail' => 'Dati mancanti.']]);
+             exit;
+        }
+        $response = create_rule(
+            $data['group_id'], 
+            $data['action'], 
+            $data['protocol'] ?? 'all', 
+            $data['destination'], 
+            $data['port'] ?? null,
+            $data['description'] ?? '',
+            $data['order'] ?? null
+        );
+        echo json_encode($response);
+        break;
+
+    case 'delete_rule':
+        $rule_id = $_POST['rule_id'] ?? '';
+         if (empty($rule_id)) {
+             echo json_encode(['success' => false, 'body' => ['detail' => 'ID regola mancante.']]);
+             exit;
+        }
+        $response = delete_rule($rule_id);
+        echo json_encode($response);
+        break;
+
+    case 'reorder_rules':
+         $input = file_get_contents('php://input');
+         $data = json_decode($input, true);
+         if (!$data || !isset($data['orders'])) {
+             echo json_encode(['success' => false, 'body' => ['detail' => 'Dati mancanti.']]);
+             exit;
+         }
+         $response = reorder_rules($data['orders']);
+         echo json_encode($response);
+         break;
+
     default:
         echo json_encode(['success' => false, 'body' => ['detail' => 'Azione non riconosciuta.']]);
         break;
