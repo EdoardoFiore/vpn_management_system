@@ -41,7 +41,23 @@ def _load_groups() -> List[Group]:
         except Exception: return []
     return []
 
-# ... unchanged ...
+def _save_groups(groups: List[Group]):
+    os.makedirs(os.path.dirname(GROUPS_FILE), exist_ok=True)
+    with open(GROUPS_FILE, "w") as f:
+        json.dump([g.dict() for g in groups], f, indent=4)
+
+def _load_rules() -> List[Rule]:
+    if os.path.exists(RULES_FILE):
+        try:
+            with open(RULES_FILE, "r") as f:
+                return [Rule(**r) for r in json.load(f)]
+        except Exception: return []
+    return []
+
+def _save_rules(rules: List[Rule]):
+    os.makedirs(os.path.dirname(RULES_FILE), exist_ok=True)
+    with open(RULES_FILE, "w") as f:
+        json.dump([r.dict() for r in rules], f, indent=4)
 
 # --- Group Management ---
 

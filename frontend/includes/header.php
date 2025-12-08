@@ -66,6 +66,15 @@
                             <li class="nav-item">
                                 <a class="nav-link" href="index.php">
                                     <span class="nav-link-icon d-md-none d-lg-inline-block">
+                                        <i class="ti ti-home"></i>
+                                    </span>
+                                    <span class="nav-link-title">Dashboard</span>
+                                </a>
+                            </li>
+                        </ul>
+                    </div>
+                </div>
+                <div class="navbar-nav flex-row order-md-last">
                     <div class="nav-item">
                         <a href="https://github.com/edoardofiore/vpn_management_system" target="_blank"
                             class="nav-link px-0" title="Source Code" rel="noreferrer">
