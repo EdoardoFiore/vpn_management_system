@@ -27,7 +27,6 @@ async function loadInstances() {
                                 <div class="text-muted">
                                     <div><strong>Porta:</strong> ${inst.port}</div>
                                     <div><strong>Subnet:</strong> ${inst.subnet}</div>
-                                    <div><strong>Subnet:</strong> ${inst.subnet}</div>
                                     <div class="mt-2 text-dark">
                                         <span class="badge ${inst.tunnel_mode === 'full' ? 'bg-primary-lt' : 'bg-warning-lt'}">
                                             ${inst.tunnel_mode === 'full' ? 'Full Tunnel' : 'Split Tunnel'}
