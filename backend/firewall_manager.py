@@ -94,27 +94,22 @@ def add_member_to_group(group_id: str, client_identifier: str, subnet_info: Dict
 
     instance_name = subnet_info["instance_name"]
     
-    # --- Start of Correction Logic ---
-    # Sanitize the client_identifier to prevent duplicate prefixes.
-    # E.g. handles cases where "instance_instance_client" is received.
+    # Sanitize the client_identifier to prevent duplicate prefixes, e.g. "inst_inst_client"
     correct_identifier = client_identifier
     prefix_to_check = f"{instance_name}_"
-    
-    # Repeatedly strip the prefix if it's duplicated
     while correct_identifier.startswith(prefix_to_check + instance_name):
         correct_identifier = correct_identifier[len(prefix_to_check):]
-    # --- End of Correction Logic ---
-
+    
     if instance_name != group.instance_id:
         raise ValueError(f"Client does not belong to instance {group.instance_id}")
 
     if correct_identifier not in group.members:
-        # 1. Allocate Static IP using the corrected base name
-        client_base_name = correct_identifier.replace(f"{instance_name}_", "")
-        
-        ip = ip_manager.allocate_static_ip(instance_name, subnet_info["subnet"], client_base_name)
+        # 1. Allocate Static IP. 
+        # The client name used for the CCD file MUST be the full, correct identifier
+        # that matches the client's Common Name (CN) in its certificate.
+        ip = ip_manager.allocate_static_ip(instance_name, subnet_info["subnet"], correct_identifier)
         if not ip:
-            raise RuntimeError(f"Failed to allocate static IP for {client_base_name}")
+            raise RuntimeError(f"Failed to allocate static IP for {correct_identifier}")
 
         group.members.append(correct_identifier)
         _save_groups(groups)
