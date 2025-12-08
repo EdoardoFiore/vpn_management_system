@@ -200,9 +200,27 @@ async function createInstance() {
         } else {
             showNotification('danger', 'Errore creazione: ' + (result.body.detail || 'Sconosciuto'));
         }
+    } catch (e) {
+        showNotification('danger', 'Errore di connessione: ' + e.message);
+    }
+}
+
+document.addEventListener('DOMContentLoaded', () => {
+    loadInstances();
+    const instanceModal = document.getElementById('modal-create-instance');
+    if (instanceModal) {
+        // Possible init code
+    }
+    loadTopClients();
+});
+
+async function loadTopClients() {
+    try {
+        const response = await fetch(`${API_AJAX_HANDLER}?action=get_top_clients`);
+        const result = await response.json();
         const container = document.getElementById('top-clients-container');
 
-        if (!container) return; // Container might not exist yet if index.php isn't updated
+        if (!container) return;
         container.innerHTML = '';
 
         if (result.success) {
@@ -212,18 +230,21 @@ async function createInstance() {
                 return;
             }
 
-            // Find max for progress bar calculation
             const maxBytes = Math.max(...clients.map(c => c.total_bytes));
 
             clients.forEach(client => {
-                const percentage = (client.total_bytes / maxBytes) * 100;
+                const percentage = maxBytes > 0 ? (client.total_bytes / maxBytes) * 100 : 0;
                 const displayName = client.client_name.replace(`${client.instance_name}_`, '');
 
-                // Format connected since time (HH:MM)
                 let timeStr = '-';
-                if (client.connected_since) {
+                if (client.connected_since && client.connected_since !== '-') {
                     const date = new Date(client.connected_since);
-                    timeStr = date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+                    // Check if valid date
+                    if (!isNaN(date.getTime())) {
+                        timeStr = date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+                    } else {
+                        timeStr = client.connected_since;
+                    }
                 }
 
                 const html = `
