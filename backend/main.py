@@ -19,6 +19,7 @@ class ClientRequest(BaseModel):
 
 class GroupRequest(BaseModel):
     name: str
+    instance_id: str
     description: str = ""
 
 class GroupMemberRequest(BaseModel):
@@ -266,13 +267,13 @@ async def revoke_client(instance_id: str, client_name: str):
 # --- Endpoints Gruppi e Firewall ---
 
 @app.get("/api/groups", dependencies=[Depends(get_api_key)])
-async def list_groups():
-    return firewall_manager.get_groups()
+async def list_groups(instance_id: Optional[str] = None):
+    return firewall_manager.get_groups(instance_id)
 
 @app.post("/api/groups", dependencies=[Depends(get_api_key)])
 async def create_group(request: GroupRequest):
     try:
-        return firewall_manager.create_group(request.name, request.description)
+        return firewall_manager.create_group(request.name, request.instance_id, request.description)
     except Exception as e:
         raise HTTPException(status_code=400, detail=str(e))
 

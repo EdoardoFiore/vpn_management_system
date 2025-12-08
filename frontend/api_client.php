@@ -135,12 +135,20 @@ function get_top_clients()
 
 // --- Groups & Firewall Functions ---
 
-function get_groups() {
-    return api_request('/groups');
+function get_groups($instance_id = null) {
+    $url = '/groups';
+    if ($instance_id) {
+        $url .= '?instance_id=' . urlencode($instance_id);
+    }
+    return api_request($url);
 }
 
-function create_group($name, $description) {
-    return api_request('/groups', 'POST', ['name' => $name, 'description' => $description]);
+function create_group($name, $instance_id, $description) {
+    return api_request('/groups', 'POST', [
+        'name' => $name,
+        'instance_id' => $instance_id,
+        'description' => $description
+    ]);
 }
 
 function delete_group($group_id) {

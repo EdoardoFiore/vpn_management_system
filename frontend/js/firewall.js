@@ -1,23 +1,50 @@
-
-// State
+// State (Firewall specific)
 let allGroups = [];
 let currentGroupId = null;
 let availableClientData = []; // Store client info for selector
 
+// Unlike standalone, we wait for the main instance logic to initialize us or checking tab
+// But for simplicity, we can just expose loadGroups and call it when tab is shown, 
+// or call it after loadInstanceDetails finishes.
+
+// Hook into the tab switch for lazy loading?
 document.addEventListener('DOMContentLoaded', () => {
-    loadGroups();
+    const tabEl = document.querySelector('a[data-bs-toggle="tab"][href="#tab-firewall"]');
+    if (tabEl) {
+        tabEl.addEventListener('shown.bs.tab', function (event) {
+            if (currentInstance) {
+                loadGroups();
+            }
+        });
+    }
 });
 
 // --- Groups Management ---
 
 async function loadGroups() {
+    if (!currentInstance) return;
+
     try {
-        const response = await fetch(`${API_AJAX_HANDLER}?action=get_groups`);
+        const response = await fetch(`${API_AJAX_HANDLER}?action=get_groups&instance_id=${currentInstance.id}`);
         const result = await response.json();
 
         if (result.success) {
             allGroups = result.body;
             renderGroupsList();
+
+            // Refreshes the active view if a group is selected
+            if (currentGroupId) {
+                // Check if group still exists
+                const group = allGroups.find(g => g.id === currentGroupId);
+                if (group) {
+                    selectGroup(currentGroupId);
+                } else {
+                    // Group was deleted remotely? Deselect
+                    currentGroupId = null;
+                    document.getElementById('group-details-container').style.display = 'none';
+                    document.getElementById('no-group-selected').style.display = 'block';
+                }
+            }
         } else {
             console.error(result.body.detail);
         }
@@ -55,6 +82,8 @@ function renderGroupsList() {
 }
 
 async function createGroup() {
+    if (!currentInstance) return;
+
     const name = document.getElementById('group-name-input').value;
     const desc = document.getElementById('group-desc-input').value;
 
@@ -63,7 +92,12 @@ async function createGroup() {
     const response = await fetch(`${API_AJAX_HANDLER}`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ action: 'create_group', name: name, description: desc })
+        body: JSON.stringify({
+            action: 'create_group',
+            name: name,
+            instance_id: currentInstance.id, // Inject Instance ID
+            description: desc
+        })
     });
     const result = await response.json();
 
@@ -120,28 +154,21 @@ function renderMembers(group) {
     tbody.innerHTML = '';
 
     if (group.members.length === 0) {
-        tbody.innerHTML = '<tr><td colspan="3" class="text-center text-muted">Nessun membro.</td></tr>';
+        tbody.innerHTML = '<tr><td colspan="2" class="text-center text-muted">Nessun membro.</td></tr>';
         return;
     }
 
     group.members.forEach(memberId => {
-        // Simple parser for memberId "instance_client"
-        // Heuristic: Last part is client, rest is instance (handles underscores in instance name)
-        // Actually best to look it up, but for display let's try to split carefully.
-        // Or just display raw ID if not parsable.
-        // Assuming format {INSTANCE_NAME}_{CLIENT_NAME}
-        // BUT OpenVPN script generates random instance names? No, user defines them.
-
+        // CLEANUP NAME: Remove instance prefix for display
+        // We know memberId is "{instance}_{client}"
         let displayUser = memberId;
-        let displayInstance = '-';
-
-        // This is tricky without metadata. We know how we stored it.
-        // We can just display it.
+        if (currentInstance && memberId.startsWith(currentInstance.name + "_")) {
+            displayUser = memberId.replace(currentInstance.name + "_", "");
+        }
 
         const row = document.createElement('tr');
         row.innerHTML = `
             <td>${displayUser}</td>
-            <td>-</td>
             <td>
                 <button class="btn btn-sm btn-ghost-danger" onclick="removeMember('${memberId}')">
                     <i class="ti ti-trash"></i>
@@ -153,6 +180,8 @@ function renderMembers(group) {
 }
 
 async function openAddMemberModal() {
+    if (!currentInstance) return;
+
     const modal = new bootstrap.Modal(document.getElementById('modal-add-member'));
     modal.show();
 
@@ -160,42 +189,32 @@ async function openAddMemberModal() {
     select.innerHTML = '<option value="">Caricamento...</option>';
     select.disabled = true;
 
-    // Load available clients from all instances
+    // Load available clients ONLY from CURRENT Instance
     try {
-        // Fetch instances first
-        const instResp = await fetch(`${API_AJAX_HANDLER}?action=get_instances`);
-        const instData = await instResp.json();
-        const instances = instData.body || [];
+        const clientResp = await fetch(`${API_AJAX_HANDLER}?action=get_clients&instance_id=${currentInstance.id}`);
+        const clientData = await clientResp.json();
+        const clients = clientData.body || [];
 
         availableClientData = [];
-
         select.innerHTML = '<option value="">Seleziona un utente...</option>';
 
-        for (const inst of instances) {
-            const clientResp = await fetch(`${API_AJAX_HANDLER}?action=get_clients&instance_id=${inst.id}`);
-            const clientData = await clientResp.json();
-            const clients = clientData.body || [];
-
-            clients.forEach(c => {
-                // Check if already in current group?
-                // Or in ANY group? Ideally backend prevents duplicate static IP assignment collision.
-                // Backend `add_member` handles allocation.
-
-                const id = `${inst.name}_${c.name}`;
-                availableClientData.push({
-                    id: id,
-                    client_name: c.name,
-                    instance_name: inst.name,
-                    subnet: inst.subnet,
-                    display: `${c.name} (${inst.name})`
-                });
-
-                const opt = document.createElement('option');
-                opt.value = id;
-                opt.textContent = `${c.name} (${inst.name})`;
-                select.appendChild(opt);
+        clients.forEach(c => {
+            // Create unique ID for backend
+            const id = `${currentInstance.name}_${c.name}`;
+            availableClientData.push({
+                id: id,
+                client_name: c.name,
+                instance_name: currentInstance.name,
+                subnet: currentInstance.subnet,
+                display: c.name // Clean name
             });
-        }
+
+            const opt = document.createElement('option');
+            opt.value = id;
+            opt.textContent = c.name; // Clean name
+            select.appendChild(opt);
+        });
+
         select.disabled = false;
 
     } catch (e) {
@@ -236,53 +255,8 @@ async function addMember() {
 }
 
 async function removeMember(clientId) {
-    // We need instance name for cleanup.
-    // Try to derive it from availableClientData if cached, or parse it.
-    // Heuristic: clientId = instance_client. 
-    // We stored everything as string.
-    // Let's implement a parsing strategy assume instance name doesn't contain "_custom_" ?
-    // Actually, `remove_group_member` needs `instance_name` to find the CCD file.
-
-    // Quick fix: loop `availableClientData`? It might be empty if we refreshed.
-    // Better: parse string. 
-    // Actually the robust way is backend should handle it, BUT backend expects it.
-    // Let's iterate `allGroups` members? No.
-    // Let's try to pass instance name by splitting. 
-    // If instance is "server_test" and client is "client1", id is "server_test_client1".
-    // We don't know where to split.
-    // Backend `remove_client_from_all_groups` does lookup via `firewall_manager` iteration.
-    // But `remove_member_from_group` API endpoint requires `instance_name` query param.
-    // Wait, the API endpoint `remove_group_member` takes `group_id`, `client_id`, `instance_name`.
-    // I should probably store `instance_name` in `group.json` members list as object.
-    // But I defined `members: List[str]`.
-
-    // Workaround: The backend `ip_manager` needs instance name.
-    // Can we fetch instances and match prefix?
-    // Let's implement a small helper to guess instance name.
-
-    // UI Hack: We'll assume the user loaded the Add Member modal at least once? No.
-    // Let's fetch instances silently if needed.
-
-    let instanceName = null;
-    try {
-        const instResp = await fetch(`${API_AJAX_HANDLER}?action=get_instances`);
-        const instData = await instResp.json();
-        const instances = instData.body || [];
-
-        for (const inst of instances) {
-            if (clientId.startsWith(inst.name + "_")) {
-                instanceName = inst.name;
-                break; // Best guess
-            }
-        }
-    } catch (e) { }
-
-    if (!instanceName) {
-        alert("Impossibile determinare l'istanza del client. Riprova.");
-        return;
-    }
-
-    if (!confirm(`Rimuovere ${clientId} dal gruppo?`)) return;
+    if (!currentInstance) return;
+    if (!confirm(`Rimuovere utente dal gruppo?`)) return;
 
     const response = await fetch(`${API_AJAX_HANDLER}`, {
         method: 'POST',
@@ -291,7 +265,7 @@ async function removeMember(clientId) {
             action: 'remove_group_member',
             group_id: currentGroupId,
             client_identifier: clientId,
-            instance_name: instanceName
+            instance_name: currentInstance.name // We know it matches
         })
     });
 
@@ -389,11 +363,11 @@ async function createRule() {
 
     if (!dest) return alert("Destinazione richiesta.");
 
-    const response = await fetch(`${API_AJAX_HANDLER}`, {
+    // Fix: Send dispatch action in URL to avoid collision with rule 'action' field in body
+    const response = await fetch(`${API_AJAX_HANDLER}?action=create_rule`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-            action: 'create_rule',
             group_id: currentGroupId,
             action: action,
             protocol: proto,

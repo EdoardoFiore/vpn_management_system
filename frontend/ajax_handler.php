@@ -146,18 +146,19 @@ switch ($action) {
     // --- Groups & Rules Cases ---
 
     case 'get_groups':
-        $response = get_groups();
+        $instance_id = $_GET['instance_id'] ?? null;
+        $response = get_groups($instance_id);
         echo json_encode($response);
         break;
 
     case 'create_group':
         $input = file_get_contents('php://input');
         $data = json_decode($input, true);
-        if (!$data || !isset($data['name'])) {
+        if (!$data || !isset($data['name']) || !isset($data['instance_id'])) {
              echo json_encode(['success' => false, 'body' => ['detail' => 'Dati mancanti.']]);
              exit;
         }
-        $response = create_group($data['name'], $data['description'] ?? '');
+        $response = create_group($data['name'], $data['instance_id'], $data['description'] ?? '');
         echo json_encode($response);
         break;
 

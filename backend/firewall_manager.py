@@ -17,6 +17,7 @@ CHAIN_NAME = "VPN_sys_FORWARD"
 
 class Group(BaseModel):
     id: str
+    instance_id: str
     name: str
     description: str = ""
     members: List[str] = [] # List of "instance_name_client_name"
@@ -36,36 +37,21 @@ def _load_groups() -> List[Group]:
         try:
             with open(GROUPS_FILE, "r") as f:
                 return [Group(**g) for g in json.load(f)]
-        except: return []
+    # ... error handling ...
+        except Exception: return []
     return []
 
-def _save_groups(groups: List[Group]):
-    os.makedirs(os.path.dirname(GROUPS_FILE), exist_ok=True)
-    with open(GROUPS_FILE, "w") as f:
-        json.dump([g.dict() for g in groups], f, indent=4)
-
-def _load_rules() -> List[Rule]:
-    if os.path.exists(RULES_FILE):
-        try:
-            with open(RULES_FILE, "r") as f:
-                return [Rule(**r) for r in json.load(f)]
-        except: return []
-    return []
-
-def _save_rules(rules: List[Rule]):
-    os.makedirs(os.path.dirname(RULES_FILE), exist_ok=True)
-    with open(RULES_FILE, "w") as f:
-        json.dump([r.dict() for r in rules], f, indent=4)
+# ... unchanged ...
 
 # --- Group Management ---
 
-def create_group(name: str, description: str = "") -> Group:
+def create_group(name: str, instance_id: str, description: str = "") -> Group:
     groups = _load_groups()
-    group_id = name.lower().replace(" ", "_")
+    group_id = f"{instance_id}_{name.lower().replace(' ', '_')}"
     if any(g.id == group_id for g in groups):
-        raise ValueError("Group already exists")
+        raise ValueError("Group already exists for this instance")
     
-    group = Group(id=group_id, name=name, description=description)
+    group = Group(id=group_id, instance_id=instance_id, name=name, description=description)
     groups.append(group)
     _save_groups(groups)
     return group
@@ -90,6 +76,15 @@ def add_member_to_group(group_id: str, client_identifier: str, subnet_info: Dict
     if not group:
         raise ValueError("Group not found")
     
+    # Validation: Ensure member belongs to group's instance
+    # client_identifier is "instance_client". We expect prefix to match group.instance_id
+    # But group.instance_id is "server_test", client_id is "server_test_client1"
+    # Actually wait. `client_identifier` passed from frontend is usually "instance_client".
+    # `subnet_info["instance_name"]` should match `group.instance_id`.
+    
+    if subnet_info["instance_name"] != group.instance_id:
+        raise ValueError(f"Client does not belong to instance {group.instance_id}")
+
     if client_identifier not in group.members:
         # 1. Allocate Static IP
         instance_name = subnet_info["instance_name"]
@@ -139,8 +134,11 @@ def remove_client_from_all_groups(instance_name: str, client_name: str):
         _save_groups(groups)
         apply_firewall_rules()
 
-def get_groups() -> List[Group]:
-    return _load_groups()
+def get_groups(instance_id: Optional[str] = None) -> List[Group]:
+    groups = _load_groups()
+    if instance_id:
+        return [g for g in groups if g.instance_id == instance_id]
+    return groups
 
 # --- Rule Management ---
 
