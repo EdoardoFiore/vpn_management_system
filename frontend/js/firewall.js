@@ -201,17 +201,23 @@ async function openAddMemberModal() {
         clients.forEach(c => {
             // Create unique ID for backend
             const id = `${currentInstance.name}_${c.name}`;
+            // Clean name for display (strip instance prefix)
+            let displayName = c.name;
+            if (c.name.startsWith(currentInstance.name + "_")) {
+                displayName = c.name.replace(currentInstance.name + "_", "");
+            }
+
             availableClientData.push({
                 id: id,
                 client_name: c.name,
                 instance_name: currentInstance.name,
                 subnet: currentInstance.subnet,
-                display: c.name // Clean name
+                display: displayName // Clean name
             });
 
             const opt = document.createElement('option');
             opt.value = id;
-            opt.textContent = c.name; // Clean name
+            opt.textContent = displayName; // Clean name
             select.appendChild(opt);
         });
 

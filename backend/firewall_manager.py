@@ -158,11 +158,17 @@ def get_groups(instance_id: Optional[str] = None) -> List[Group]:
 
 # --- Rule Management ---
 
+import uuid
+
 def add_rule(rule_data: dict) -> Rule:
     rules = _load_rules()
     
-    # Calculate order if not provided (append to end)
-    if "order" not in rule_data:
+    # Generate ID if missing
+    if "id" not in rule_data or not rule_data["id"]:
+        rule_data["id"] = str(uuid.uuid4())
+
+    # Calculate order if not provided or None
+    if "order" not in rule_data or rule_data["order"] is None:
         max_order = max([r.order for r in rules if r.group_id == rule_data["group_id"]], default=-1)
         rule_data["order"] = max_order + 1
         
