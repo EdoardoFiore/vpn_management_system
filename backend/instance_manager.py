@@ -25,6 +25,7 @@ class Instance(BaseModel):
     routes: List[Dict[str, str]] = []  # List of {"network": "192.168.1.0/24", "interface": "eth1"}
     dns_servers: List[str] = [] # List of DNS servers to push
     clients: List[str] = []  # List of client names associated with this instance
+    connected_clients: int = 0
     status: str = "stopped" # stopped, running
 
 def _save_iptables_rules():

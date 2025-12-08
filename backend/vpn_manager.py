@@ -52,7 +52,7 @@ def list_clients(instance_id: str) -> List[Dict]:
     instance_client_names = instance_manager.get_instance_clients(instance_id)
     
     all_clients_from_pki = _get_all_clients_from_pki()
-    connected_clients = _get_connected_clients(instance.name)
+    connected_clients = get_connected_clients(instance.name)
 
     # Filter to only show clients belonging to this instance
     filtered_clients = []
@@ -84,7 +84,7 @@ def _get_all_clients_from_pki():
                     clients.append({"name": client_name})
     return clients
 
-def _get_connected_clients(instance_name: str):
+def get_connected_clients(instance_name: str):
     connected_clients = {}
     status_log_path = f"/var/log/openvpn/status_{instance_name}.log"
     

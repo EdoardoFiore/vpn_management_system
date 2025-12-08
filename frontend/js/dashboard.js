@@ -27,7 +27,16 @@ async function loadInstances() {
                                 <div class="text-muted">
                                     <div><strong>Porta:</strong> ${inst.port}</div>
                                     <div><strong>Subnet:</strong> ${inst.subnet}</div>
-                                    <div><strong>Protocollo:</strong> ${inst.protocol}</div>
+                                    <div><strong>Subnet:</strong> ${inst.subnet}</div>
+                                    <div class="mt-2 text-dark">
+                                        <span class="badge ${inst.tunnel_mode === 'full' ? 'bg-primary-lt' : 'bg-warning-lt'}">
+                                            ${inst.tunnel_mode === 'full' ? 'Full Tunnel' : 'Split Tunnel'}
+                                        </span>
+                                    </div>
+                                    <div class="d-flex align-items-center mt-2">
+                                        <i class="ti ti-users me-1"></i>
+                                        <strong>${inst.connected_clients || 0}</strong> &nbsp;Client Attivi
+                                    </div>
                                 </div>
                             </div>
                         </div>

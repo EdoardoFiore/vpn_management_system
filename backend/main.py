@@ -71,8 +71,15 @@ app.add_middleware(
 
 @app.get("/api/instances", dependencies=[Depends(get_api_key)])
 async def get_instances():
-    """Restituisce la lista di tutte le istanze OpenVPN."""
-    return instance_manager.get_all_instances()
+    """Restituisce la lista di tutte le istanze OpenVPN con il conteggio dei client connessi."""
+    instances = instance_manager.get_all_instances()
+    for inst in instances:
+        if inst.status == "running":
+            connected = vpn_manager.get_connected_clients(inst.name)
+            inst.connected_clients = len(connected)
+        else:
+            inst.connected_clients = 0
+    return instances
 
 @app.get("/api/instances/{instance_id}", dependencies=[Depends(get_api_key)])
 async def get_instance(instance_id: str):
