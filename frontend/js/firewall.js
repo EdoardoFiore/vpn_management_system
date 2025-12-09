@@ -45,6 +45,9 @@ async function loadGroups() {
                     document.getElementById('no-group-selected').style.display = 'block';
                 }
             }
+            // Add this: Populate the default policy dropdown
+            document.getElementById('instance-firewall-default-policy').value = currentInstance.firewall_default_policy;
+
         } else {
             console.error(result.body.detail);
         }

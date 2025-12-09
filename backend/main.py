@@ -64,6 +64,9 @@ class InstanceRequest(BaseModel):
     routes: List[RouteConfig] = []  # Custom routes for split tunnel
     dns_servers: List[str] = [] # Optional custom DNS servers
 
+class FirewallPolicyRequest(BaseModel):
+    default_policy: str
+
 # --- Sicurezza con API Key ---
 API_KEY = os.getenv("API_KEY", "change-this-in-production")
 API_KEY_NAME = "X-API-Key"
@@ -158,6 +161,20 @@ def update_instance_routes(instance_id: str, request: RouteUpdateRequest, api_ke
         return updated_instance
     except ValueError as e:
         raise HTTPException(status_code=404, detail=str(e))
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.patch("/api/instances/{instance_id}/firewall-policy", dependencies=[Depends(get_api_key)])
+async def update_instance_firewall_policy_endpoint(instance_id: str, request: FirewallPolicyRequest):
+    """Aggiorna la policy di default del firewall per una specifica istanza."""
+    try:
+        updated_instance = instance_manager.update_instance_firewall_policy(
+            instance_id=instance_id,
+            new_policy=request.default_policy
+        )
+        return updated_instance
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 

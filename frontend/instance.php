@@ -174,6 +174,22 @@ require_once 'includes/header.php';
 
     <!-- Firewall Tab (New) -->
     <div class="tab-pane" id="tab-firewall">
+        <div class="card mb-3">
+            <div class="card-header">
+                <h3 class="card-title">Policy di Default Firewall Istanza</h3>
+            </div>
+            <div class="card-body">
+                <div class="mb-3">
+                    <label class="form-label">Policy Iniziale per il Traffico dei Client VPN</label>
+                    <select class="form-select" id="instance-firewall-default-policy">
+                        <option value="ACCEPT">ACCEPT (Consenti tutto ciò che non è esplicitamente bloccato)</option>
+                        <option value="DROP">DROP (Blocca tutto ciò che non è esplicitamente consentito)</option>
+                    </select>
+                    <small class="form-hint">Questa policy si applica a tutto il traffico che proviene dai client VPN di questa istanza e che non corrisponde a nessuna delle regole dei gruppi ACL definite.</small>
+                </div>
+                <button class="btn btn-primary" onclick="saveInstanceFirewallPolicy()">Salva Policy</button>
+            </div>
+        </div>
         <div class="row row-cards">
             <!-- Sidebar: Groups List -->
             <div class="col-md-4">
