@@ -128,8 +128,7 @@ def remove_member_from_group(group_id: str, client_identifier: str, instance_nam
         _save_groups(groups)
         
         # Release Static IP
-        client_base_name = client_identifier.replace(f"{instance_name}_", "")
-        ip_manager.release_static_ip(instance_name, client_base_name)
+        ip_manager.release_static_ip(instance_name, client_identifier)
         
         apply_firewall_rules()
 
@@ -146,7 +145,7 @@ def remove_client_from_all_groups(instance_name: str, client_name: str):
             group.members.remove(client_identifier)
             modified = True
             # Release Static IP
-            ip_manager.release_static_ip(instance_name, client_name)
+            ip_manager.release_static_ip(instance_name, client_identifier)
 
     if modified:
         _save_groups(groups)
@@ -285,12 +284,13 @@ def apply_firewall_rules():
             if member_id.startswith(prefix):
                  client_name_only = member_id[len(prefix):]
                  logger.debug(f"Match found. Instance: '{instance_name}', Client: '{client_name_only}'")
-                 ip = ip_manager.get_assigned_ip(instance_name, client_name_only)
+                 # Pass the full member_id, as it matches the CCD file name (e.g., instance_client)
+                 ip = ip_manager.get_assigned_ip(instance_name, member_id)
                  if ip:
-                     logger.info(f"Found IP {ip} for client '{client_name_only}' in instance '{instance_name}'.")
+                     logger.info(f"Found IP {ip} for client '{member_id}' in instance '{instance_name}'.")
                      return ip
                  else:
-                     logger.warning(f"Could not find assigned IP for client '{client_name_only}' in instance '{instance_name}'. CCD file might be missing or empty.")
+                     logger.warning(f"Could not find assigned IP for client '{member_id}' in instance '{instance_name}'. CCD file might be missing or empty.")
                  return None # Important: return after first match
         
         logger.warning(f"No matching instance found for member_id '{member_id}'.")
