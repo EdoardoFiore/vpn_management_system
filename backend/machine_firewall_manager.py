@@ -15,28 +15,58 @@ MACHINE_FIREWALL_RULES_FILE = os.path.join(CONFIG_DIR, "machine_firewall_rules.j
 
 class MachineFirewallManager:
     def __init__(self):
-        self.rules: List[MachineFirewallRule] = []
-        self._load_rules()
-        # Apply rules on startup
-        self.apply_all_rules()
+        try:
+            self.rules: List[MachineFirewallRule] = []
+            load_success = self._load_rules()
+            # Apply rules on startup ONLY if loading was successful
+            if load_success:
+                self.apply_all_rules()
+        except Exception as e:
+            logger.error(f"FATAL: Error during MachineFirewallManager initialization: {e}", exc_info=True)
+            # Re-raise to crash early and show full traceback
+            raise 
 
-    def _load_rules(self):
+    def _load_rules(self) -> bool: # Added return type for clarity
         """Loads machine firewall rules from a JSON file."""
         if not os.path.exists(CONFIG_DIR):
+            logger.info(f"Creating config directory: {CONFIG_DIR}")
             os.makedirs(CONFIG_DIR)
         
         if os.path.exists(MACHINE_FIREWALL_RULES_FILE):
             try:
+                logger.debug(f"Attempting to read rules from {MACHINE_FIREWALL_RULES_FILE}")
                 with open(MACHINE_FIREWALL_RULES_FILE, 'r') as f:
                     rules_data = json.load(f)
-                    self.rules = [MachineFirewallRule.from_dict(r) for r in rules_data]
-                logger.info(f"Loaded {len(self.rules)} machine firewall rules.")
+                
+                # Add logging for the raw loaded data
+                logger.debug(f"Raw rules data loaded: {rules_data}")
+
+                # Detailed error checking during deserialization
+                loaded_rules = []
+                for r_data in rules_data:
+                    try:
+                        loaded_rules.append(MachineFirewallRule.from_dict(r_data))
+                    except Exception as rule_e:
+                        logger.error(f"Error deserializing rule data '{r_data}': {rule_e}")
+                        # Decide how to handle this: skip the rule, fail entirely, etc.
+                        # For now, we'll log and continue if possible, but it implies a corrupt file.
+                        pass # Continue processing other rules
+                self.rules = loaded_rules
+                
+                logger.info(f"Loaded {len(self.rules)} machine firewall rules successfully.")
+                return True
+            except json.JSONDecodeError as json_e:
+                logger.error(f"JSON decoding error in {MACHINE_FIREWALL_RULES_FILE}: {json_e}")
+                self.rules = []
+                return False
             except Exception as e:
-                logger.error(f"Error loading machine firewall rules from {MACHINE_FIREWALL_RULES_FILE}: {e}")
-                self.rules = [] # Reset rules if loading fails
+                logger.error(f"Generic error loading machine firewall rules from {MACHINE_FIREWALL_RULES_FILE}: {e}")
+                self.rules = []
+                return False
         else:
             self.rules = []
-            logger.info("No existing machine firewall rules file found.")
+            logger.info("No existing machine firewall rules file found. Initializing with empty rules.")
+            return True # No file is not an error
 
     def _save_rules(self):
         """Saves current machine firewall rules to a JSON file."""

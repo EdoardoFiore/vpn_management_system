@@ -347,7 +347,7 @@ def add_forwarding_rule(source_subnet: str, dest_network: str):
     Adds a forwarding rule to allow traffic from a VPN subnet to a specific destination network.
     """
     # Example: iptables -I FORWARD -s 10.8.0.0/24 -d 192.168.1.0/24 -j ACCEPT
-    return _run_iptables("filter", ["-I", "FORWARD", "-s", source_subnet, "-d", dest_network, "-j", "ACCEPT"]))
+    return _run_iptables("filter", ["-I", "FORWARD", "-s", source_subnet, "-d", dest_network, "-j", "ACCEPT"])
 
 def remove_forwarding_rule(source_subnet: str, dest_network: str):
     return _run_iptables("filter", ["-D", "FORWARD", "-s", source_subnet, "-d", dest_network, "-j", "ACCEPT"])

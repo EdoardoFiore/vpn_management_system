@@ -7,7 +7,7 @@ from ipaddress import ip_network, ip_address, AddressValueError
 from typing import List, Optional, Dict
 from pydantic import BaseModel
 import iptables_manager
-import firewall_manager
+import firewall_manager as instance_firewall_manager
 
 logger = logging.getLogger(__name__)
 
@@ -644,7 +644,7 @@ def update_instance_firewall_policy(instance_id: str, new_policy: str) -> Instan
         raise ValueError(f"Instance '{instance_id}' not found")
 
     _save_instances(instances)
-    firewall_manager.apply_firewall_rules() # Apply changes immediately
+    instance_firewall_manager.apply_firewall_rules() # Apply changes immediately
     logger.info(f"Updated firewall policy for instance '{instance_id}' to '{new_policy}'.")
     return found_instance
 

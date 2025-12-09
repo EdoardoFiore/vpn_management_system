@@ -305,24 +305,24 @@ async def revoke_client(instance_id: str, client_name: str):
 
 @app.get("/api/groups", dependencies=[Depends(get_api_key)])
 async def list_groups(instance_id: Optional[str] = None):
-    return firewall_manager.get_groups(instance_id)
+    return instance_firewall_manager.get_groups(instance_id)
 
 @app.post("/api/groups", dependencies=[Depends(get_api_key)])
 async def create_group(request: GroupRequest):
     try:
-        return firewall_manager.create_group(request.name, request.instance_id, request.description)
+        return instance_firewall_manager.create_group(request.name, request.instance_id, request.description)
     except Exception as e:
         raise HTTPException(status_code=400, detail=str(e))
 
 @app.delete("/api/groups/{group_id}", dependencies=[Depends(get_api_key)])
 async def delete_group(group_id: str):
-    firewall_manager.delete_group(group_id)
+    instance_firewall_manager.delete_group(group_id)
     return {"success": True}
 
 @app.post("/api/groups/{group_id}/members", dependencies=[Depends(get_api_key)])
 async def add_group_member(group_id: str, request: GroupMemberRequest):
     try:
-        firewall_manager.add_member_to_group(group_id, request.client_identifier, request.subnet_info)
+        instance_firewall_manager.add_member_to_group(group_id, request.client_identifier, request.subnet_info)
         return {"success": True}
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
@@ -330,7 +330,7 @@ async def add_group_member(group_id: str, request: GroupMemberRequest):
 @app.delete("/api/groups/{group_id}/members/{client_identifier}", dependencies=[Depends(get_api_key)])
 async def remove_group_member(group_id: str, client_identifier: str, instance_name: str):
     try:
-        firewall_manager.remove_member_from_group(group_id, client_identifier, instance_name)
+        instance_firewall_manager.remove_member_from_group(group_id, client_identifier, instance_name)
         return {"success": True}
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
@@ -339,25 +339,25 @@ async def remove_group_member(group_id: str, client_identifier: str, instance_na
 
 @app.get("/api/firewall/rules", dependencies=[Depends(get_api_key)])
 async def list_rules(group_id: Optional[str] = None):
-    return firewall_manager.get_rules(group_id)
+    return instance_firewall_manager.get_rules(group_id)
 
 @app.post("/api/firewall/rules", dependencies=[Depends(get_api_key)])
 async def create_rule(request: RuleRequest):
     try:
-        return firewall_manager.add_rule(request.dict())
+        return instance_firewall_manager.add_rule(request.dict())
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
 @app.delete("/api/firewall/rules/{rule_id}", dependencies=[Depends(get_api_key)])
 async def delete_rule(rule_id: str):
-    firewall_manager.delete_rule(rule_id)
+    instance_firewall_manager.delete_rule(rule_id)
     return {"success": True}
 
 @app.post("/api/firewall/rules/order", dependencies=[Depends(get_api_key)])
 async def reorder_rules(orders: List[RuleOrderRequest]):
     try:
         data = [{"id": x.id, "order": x.order} for x in orders]
-        firewall_manager.update_rule_order(data)
+        instance_firewall_manager.update_rule_order(data)
         return {"success": True}
     except Exception as e:
          raise HTTPException(status_code=500, detail=str(e))
