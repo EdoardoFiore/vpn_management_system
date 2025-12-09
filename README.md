@@ -53,6 +53,11 @@ L'installazione è progettata per essere "Zero Config": cloni la repository, lan
     *   Scarica il file `.ovpn` autoconfigurante.
     *   Revoca l'accesso istantaneamente se un dispositivo viene perso o compromesso.
 *   **DNS Personalizzati**: Configura server DNS specifici per ogni istanza VPN (es. Pi-Hole, Google DNS).
+*   **Firewall ACL per Gruppi**:
+    *   Crea gruppi di client (es. "Amministratori", "Sviluppatori") per ogni istanza.
+    *   Assegna regole granulari per consentire (`ACCEPT`) o bloccare (`DROP`) il traffico verso specifiche destinazioni (IP/CIDR) e porte.
+    *   A ogni client aggiunto a un gruppo viene assegnato un IP statico per garantire la coerenza delle regole.
+    *   Gestisci l'ordine di priorità delle regole direttamente dall'interfaccia.
 
 ---
 
