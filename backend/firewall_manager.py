@@ -48,7 +48,8 @@ class Rule(BaseModel):
     @validator('port')
     def validate_port(cls, v, values):
         """Validate that the port is a single number or a valid range."""
-        if v is None:
+        # Treat empty string as None, then proceed.
+        if v is None or v.strip() == '':
             return None
 
         protocol = values.get('protocol')

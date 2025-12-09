@@ -385,7 +385,7 @@ async function createRule() {
     // --- VALIDATION ---
     let isValid = true;
     const dest = destInput.value.trim();
-    const port = portInput.value.trim();
+    let port = portInput.value.trim(); // Use let to allow modification
 
     // Reset validation
     destInput.classList.remove('is-invalid');
@@ -427,6 +427,11 @@ async function createRule() {
         return;
     }
     // --- END VALIDATION ---
+
+    // Sanitize payload: ensure port is null for non-TCP/UDP protocols
+    if (proto !== 'tcp' && proto !== 'udp') {
+        port = null;
+    }
 
     const response = await fetch(`${API_AJAX_HANDLER}?action=create_rule`, {
         method: 'POST',
