@@ -252,6 +252,11 @@ def clear_machine_firewall_rules_by_comment_prefix(table: str = "filter", commen
                 error_message = rule_delete_error
         
     except subprocess.CalledProcessError as e:
+        # If the table doesn't exist, it's not a fatal error.
+        if "does not exist" in e.stderr:
+            logger.warning(f"Table '{table}' does not exist, skipping rule clearance. This is normal if the table is not in use.")
+            return True, None
+            
         logger.error(f"Error listing iptables rules for table {table}: {e.stderr.strip()}")
         success = False
         error_message = e.stderr.strip()

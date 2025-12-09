@@ -109,7 +109,6 @@ def _import_default_instance() -> Optional[Instance]:
                 else:
                     tun_interface = tun_dev
             
-            logger.info(f"Default instance using TUN interface: {tun_interface}")
             
             subnet = f"{network}/{cidr}"
 
