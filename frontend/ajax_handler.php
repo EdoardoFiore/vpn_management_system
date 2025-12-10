@@ -241,8 +241,118 @@ switch ($action) {
          echo json_encode($response);
          break;
 
+    case 'update_instance_firewall_policy':
+        $input = file_get_contents('php://input');
+        $data = json_decode($input, true);
+
+        if (!$data || !isset($data['instance_id']) || !isset($data['default_policy'])) {
+            echo json_encode(['success' => false, 'body' => ['detail' => 'Dati mancanti per aggiornamento policy firewall.']]);
+            exit;
+        }
+        $response = update_instance_firewall_policy($data['instance_id'], $data['default_policy']);
+        echo json_encode($response);
+        break;
+
+    case 'update_instance_firewall_policy':
+        $input = file_get_contents('php://input');
+        $data = json_decode($input, true);
+
+        if (!$data || !isset($data['instance_id']) || !isset($data['default_policy'])) {
+            echo json_encode(['success' => false, 'body' => ['detail' => 'Dati mancanti per aggiornamento policy firewall.']]);
+            exit;
+        }
+        $response = update_instance_firewall_policy($data['instance_id'], $data['default_policy']);
+        echo json_encode($response);
+        break;
+
+    // --- Machine Firewall Rules Cases ---
+
+    case 'get_machine_firewall_rules':
+        $response = get_machine_firewall_rules();
+        echo json_encode($response);
+        break;
+
+    case 'add_machine_firewall_rule':
+        $input = file_get_contents('php://input');
+        $data = json_decode($input, true);
+        if (!$data || !isset($data['chain']) || !isset($data['action'])) {
+            echo json_encode(['success' => false, 'body' => ['detail' => 'Dati mancanti per aggiungere la regola firewall macchina.']]);
+            exit;
+        }
+        $response = add_machine_firewall_rule($data);
+        echo json_encode($response);
+        break;
+
+    case 'delete_machine_firewall_rule':
+        $rule_id = $_GET['rule_id'] ?? '';
+        if (empty($rule_id)) {
+            echo json_encode(['success' => false, 'body' => ['detail' => 'ID regola macchina mancante.']]);
+            exit;
+        }
+        $response = delete_machine_firewall_rule($rule_id);
+        echo json_encode($response);
+        break;
+
+    case 'update_machine_firewall_rule':
+        $rule_id = $_GET['rule_id'] ?? '';
+        $input = file_get_contents('php://input');
+        $data = json_decode($input, true);
+        if (empty($rule_id) || !$data) {
+            echo json_encode(['success' => false, 'body' => ['detail' => 'Dati mancanti per aggiornare la regola.']]);
+            exit;
+        }
+        $response = update_machine_firewall_rule($rule_id, $data);
+        echo json_encode($response);
+        break;
+
+    case 'apply_machine_firewall_rules':
+        $input = file_get_contents('php://input');
+        $data = json_decode($input, true);
+        if (!$data) {
+            echo json_encode(['success' => false, 'body' => ['detail' => 'Dati mancanti per applicare le regole firewall macchina.']]);
+            exit;
+        }
+        $response = apply_machine_firewall_rules($data);
+        echo json_encode($response);
+        break;
+
+    // --- Machine Network Interface Cases ---
+
+    case 'get_machine_network_interfaces':
+        $response = get_machine_network_interfaces();
+        echo json_encode($response);
+        break;
+
+    case 'get_machine_network_interface_config':
+        $interface_name = $_GET['interface_name'] ?? '';
+        if (empty($interface_name)) {
+            echo json_encode(['success' => false, 'body' => ['detail' => 'Nome interfaccia mancante.']]);
+            exit;
+        }
+        $response = get_machine_network_interface_config($interface_name);
+        echo json_encode($response);
+        break;
+
+    case 'update_machine_network_interface_config':
+        $interface_name = $_GET['interface_name'] ?? ''; // From URL for DELETE/GET-like actions
+        $input = file_get_contents('php://input');
+        $data = json_decode($input, true);
+        if (empty($interface_name) || !$data) {
+            echo json_encode(['success' => false, 'body' => ['detail' => 'Dati mancanti per aggiornare la configurazione interfaccia.']]);
+            exit;
+        }
+        $response = update_machine_network_interface_config($interface_name, $data);
+        echo json_encode($response);
+        break;
+
+    case 'apply_global_netplan_config':
+        $response = apply_global_netplan_config();
+        echo json_encode($response);
+        break;
+
     default:
         echo json_encode(['success' => false, 'body' => ['detail' => 'Azione non riconosciuta.']]);
         break;
+
 }
 

@@ -107,7 +107,7 @@ Se vuoi aggiungere colleghi o cambiare la tua password, usa il comando `htpasswd
 
 ## � Stack Tecnologico
 
-*   **Core**: OpenVPN (protocollo standard industriale).
+*   **Core**: OpenVPN (protocollo standard industriale). Per la prima installazione e configurazione base di OpenVPN, viene utilizzato lo script di https://github.com/angristan/openvpn-install.
 *   **Backend**: Python con FastAPI (veloce, asincrono).
 *   **Frontend**: PHP leggero + JavaScript Vanilla (nessun processo di build complesso necessario).
 *   **Server**: Nginx (affidabilità e performance).

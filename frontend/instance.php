@@ -174,6 +174,22 @@ require_once 'includes/header.php';
 
     <!-- Firewall Tab (New) -->
     <div class="tab-pane" id="tab-firewall">
+        <div class="card mb-3">
+            <div class="card-header">
+                <h3 class="card-title">Policy di Default Firewall Istanza</h3>
+            </div>
+            <div class="card-body">
+                <div class="mb-3">
+                    <label class="form-label">Policy Iniziale per il Traffico dei Client VPN</label>
+                    <select class="form-select" id="instance-firewall-default-policy">
+                        <option value="ACCEPT">ACCEPT (Consenti tutto ciò che non è esplicitamente bloccato)</option>
+                        <option value="DROP">DROP (Blocca tutto ciò che non è esplicitamente consentito)</option>
+                    </select>
+                    <small class="form-hint">Questa policy si applica a tutto il traffico che proviene dai client VPN di questa istanza e che non corrisponde a nessuna delle regole dei gruppi ACL definite.</small>
+                </div>
+                <button class="btn btn-primary" onclick="saveInstanceFirewallPolicy()">Salva Policy</button>
+            </div>
+        </div>
         <div class="row row-cards">
             <!-- Sidebar: Groups List -->
             <div class="col-md-4">
@@ -350,6 +366,27 @@ require_once 'includes/header.php';
             <div class="modal-footer">
                 <button type="button" class="btn me-auto" data-bs-dismiss="modal">Annulla</button>
                 <button type="button" class="btn btn-primary" onclick="createRule()">Aggiungi Regola</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Modal Delete Rule Confirm -->
+<div class="modal modal-blur fade" id="modal-delete-rule-confirm" tabindex="-1" role="dialog" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered" role="document">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">Conferma Eliminazione Regola</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <p>Sei sicuro di voler eliminare la seguente regola?</p>
+                <div id="delete-rule-summary" class="mb-3"></div>
+                <p class="text-muted">Questa azione non può essere annullata. La regola firewall verrà rimossa permanentemente.</p>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn me-auto" data-bs-dismiss="modal">Annulla</button>
+                <button type="button" class="btn btn-danger" id="confirm-delete-rule-button" data-bs-dismiss="modal">Sì, elimina</button>
             </div>
         </div>
     </div>

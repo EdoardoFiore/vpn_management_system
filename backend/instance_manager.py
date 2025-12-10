@@ -7,6 +7,7 @@ from ipaddress import ip_network, ip_address, AddressValueError
 from typing import List, Optional, Dict
 from pydantic import BaseModel
 import iptables_manager
+import firewall_manager as instance_firewall_manager
 
 logger = logging.getLogger(__name__)
 
@@ -25,6 +26,7 @@ class Instance(BaseModel):
     tunnel_mode: str = "full"  # "full" or "split"
     routes: List[Dict[str, str]] = []  # List of {"network": "192.168.1.0/24", "interface": "eth1"}
     dns_servers: List[str] = [] # List of DNS servers to push
+    firewall_default_policy: str = "ACCEPT"  # Can be "ACCEPT" or "DROP"
     clients: List[str] = []  # List of client names associated with this instance
     connected_clients: int = 0
     status: str = "stopped" # stopped, running
@@ -107,7 +109,6 @@ def _import_default_instance() -> Optional[Instance]:
                 else:
                     tun_interface = tun_dev
             
-            logger.info(f"Default instance using TUN interface: {tun_interface}")
             
             subnet = f"{network}/{cidr}"
 
@@ -621,6 +622,30 @@ def get_instance_clients(instance_id: str) -> List[str]:
     if not instance:
         raise ValueError(f"Instance '{instance_id}' not found")
     return instance.clients
+
+def update_instance_firewall_policy(instance_id: str, new_policy: str) -> Instance:
+    """
+    Updates the default firewall policy for a specific instance.
+    """
+    if new_policy.upper() not in ["ACCEPT", "DROP"]:
+        raise ValueError("La policy deve essere 'ACCEPT' o 'DROP'.")
+
+    instances = _load_instances()
+    found_instance = None
+    for i, inst in enumerate(instances):
+        if inst.id == instance_id:
+            inst.firewall_default_policy = new_policy.upper()
+            found_instance = inst
+            instances[i] = inst # Update in list
+            break
+    
+    if not found_instance:
+        raise ValueError(f"Instance '{instance_id}' not found")
+
+    _save_instances(instances)
+    instance_firewall_manager.apply_firewall_rules() # Apply changes immediately
+    logger.info(f"Updated firewall policy for instance '{instance_id}' to '{new_policy}'.")
+    return found_instance
 
 
 

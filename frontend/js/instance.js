@@ -173,7 +173,11 @@ function downloadClient(clientName) {
 }
 
 function revokeClient(clientName) {
-    document.getElementById('revoke-client-name').textContent = clientName;
+    let displayName = clientName;
+    if (currentInstance && clientName.startsWith(currentInstance.name + "_")) {
+        displayName = clientName.replace(currentInstance.name + "_", "");
+    }
+    document.getElementById('revoke-client-name').textContent = displayName;
     document.getElementById('confirm-revoke-button').onclick = () => performRevoke(clientName);
     new bootstrap.Modal(document.getElementById('modal-revoke-confirm')).show();
 }

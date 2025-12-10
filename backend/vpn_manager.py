@@ -5,7 +5,7 @@ from datetime import datetime
 from typing import List, Dict, Tuple, Optional
 from dotenv import load_dotenv
 import instance_manager
-import firewall_manager
+import firewall_manager as instance_firewall_manager
 
 load_dotenv()
 logger = logging.getLogger(__name__)
@@ -207,7 +207,7 @@ def revoke_client(instance_id: str, client_name: str) -> Tuple[bool, str]:
         
     # 4. Remove from firewall groups
     try:
-        firewall_manager.remove_client_from_all_groups(instance.name, client_name)
+        instance_firewall_manager.remove_client_from_all_groups(instance.name, client_name)
     except Exception as e:
         logger.error(f"Failed to remove client from firewall groups: {e}")
     
