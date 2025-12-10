@@ -50,14 +50,14 @@ require_once 'includes/header.php';
                             <th>Source</th>
                             <th>Dest.</th>
                             <th>Porta</th>
-                                                        <th>In-If</th>
-                                                        <th>Out-If</th>
-                                                        <th class="w-1"></th>
-                                                    </tr>
-                                                </thead>
-                                                <tbody id="machine-firewall-rules-table-body">
-                                                    <tr><td colspan="11" class="text-center text-muted">Caricamento regole...</td></tr>
-                                                </tbody>
+                                                                                    <th>In-If</th>
+                                                                                    <th>Out-If</th>
+                                                                                    <th>Commento</th>
+                                                                                    <th class="w-1"></th>
+                                                                                </tr>
+                                                                            </thead>
+                                                                            <tbody id="machine-firewall-rules-table-body">
+                                                                                <tr><td colspan="12" class="text-center text-muted">Caricamento regole...</td></tr>                                                </tbody>
                                             </table>
                                         </div>
                                     </div>

@@ -5,6 +5,13 @@ let machineFirewallRules = [];
 let networkInterfaces = [];
 let currentEditingInterface = null; // Stores the interface being edited
 
+const chainOptionsMap = {
+    filter: ['INPUT', 'OUTPUT', 'FORWARD'],
+    nat: ['PREROUTING', 'POSTROUTING', 'OUTPUT'],
+    mangle: ['PREROUTING', 'INPUT', 'FORWARD', 'OUTPUT', 'POSTROUTING'],
+    raw: ['PREROUTING', 'OUTPUT']
+};
+
 // --- Initialization ---
 document.addEventListener('DOMContentLoaded', () => {
     // Load data when tabs are shown (lazy loading)
@@ -31,37 +38,9 @@ document.addEventListener('DOMContentLoaded', () => {
         });
 
         const form = document.getElementById('addMachineRuleForm');
-        const previewCode = document.getElementById('iptables-preview-add');
-
-        const chainOptionsMap = {
-            filter: ['INPUT', 'OUTPUT', 'FORWARD'],
-            nat: ['PREROUTING', 'POSTROUTING', 'OUTPUT'],
-            mangle: ['PREROUTING', 'INPUT', 'FORWARD', 'OUTPUT', 'POSTROUTING'],
-            raw: ['PREROUTING', 'OUTPUT']
-        };
-
-        const updateChainOptions = () => {
-            const tableSelect = form.elements['table'];
-            const chainSelect = form.elements['chain'];
-            const selectedTable = tableSelect.value;
-            
-            // Clear current options
-            chainSelect.innerHTML = '';
-
-            // Populate with new options
-            const options = chainOptionsMap[selectedTable] || [];
-            options.forEach(optionValue => {
-                const option = document.createElement('option');
-                option.value = optionValue;
-                option.textContent = optionValue;
-                chainSelect.appendChild(option);
-            });
-
-            // Trigger preview update
-            updateIptablesPreviewAddModal();
-        };
-
+        
         const updateIptablesPreviewAddModal = () => {
+            const previewCode = document.getElementById('iptables-preview-add');
             if (!form || !previewCode) return;
 
             const table = form.elements['table'].value;
@@ -114,6 +93,34 @@ document.addEventListener('DOMContentLoaded', () => {
             previewCode.textContent = command.join(' ');
         };
 
+        const updateChainOptions = (form) => {
+            const tableSelect = form.elements['table'];
+            const chainSelect = form.elements['chain'];
+            const selectedTable = tableSelect.value;
+            
+            const currentChain = chainSelect.value;
+            chainSelect.innerHTML = '';
+
+            const options = chainOptionsMap[selectedTable] || [];
+            let isCurrentChainValid = false;
+            options.forEach(optionValue => {
+                const option = document.createElement('option');
+                option.value = optionValue;
+                option.textContent = optionValue;
+                chainSelect.appendChild(option);
+                if (optionValue === currentChain) {
+                    isCurrentChainValid = true;
+                }
+            });
+
+            if(isCurrentChainValid) {
+                chainSelect.value = currentChain;
+            }
+
+            updateIptablesPreviewAddModal();
+        };
+
+
         // Attach event listeners to all inputs within the form
         form.querySelectorAll('input, select').forEach(input => {
             input.addEventListener('input', updateIptablesPreviewAddModal);
@@ -121,14 +128,13 @@ document.addEventListener('DOMContentLoaded', () => {
         });
 
         // Add specific listener for table to update chain options
-        form.elements['table'].addEventListener('change', updateChainOptions);
+        form.elements['table'].addEventListener('change', () => updateChainOptions(form));
 
         // Set initial state on modal show
         addRuleModal.addEventListener('shown.bs.modal', () => {
-             // Reset form, then update chains and preview
             document.getElementById('addMachineRuleForm').reset();
-            toggleMachinePortInput(''); // Reset port visibility
-            updateChainOptions(); // Populate chain options for the default table
+            toggleMachinePortInput(null, 'add');
+            updateChainOptions(form);
         });
     }
 });
@@ -138,7 +144,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
 async function loadMachineFirewallRules() {
     const tbody = document.getElementById('machine-firewall-rules-table-body');
-    tbody.innerHTML = '<tr><td colspan="11" class="text-center text-muted">Caricamento regole...</td></tr>';
+    tbody.innerHTML = '<tr><td colspan="12" class="text-center text-muted">Caricamento regole...</td></tr>';
     
     try {
         const response = await fetch(`${API_AJAX_HANDLER}?action=get_machine_firewall_rules`);
@@ -149,11 +155,11 @@ async function loadMachineFirewallRules() {
             renderMachineFirewallRules();
         } else {
             showNotification('danger', 'Errore caricamento regole firewall macchina: ' + (result.body.detail || 'Sconosciuto'));
-            tbody.innerHTML = '<tr><td colspan="11" class="text-center text-danger">Errore caricamento regole.</td></tr>';
+            tbody.innerHTML = '<tr><td colspan="12" class="text-center text-danger">Errore caricamento regole.</td></tr>';
         }
     } catch (e) {
         showNotification('danger', 'Errore di connessione caricando regole firewall macchina: ' + e.message);
-        tbody.innerHTML = '<tr><td colspan="11" class="text-center text-danger">Errore di connessione.</td></tr>';
+        tbody.innerHTML = '<tr><td colspan="12" class="text-center text-danger">Errore di connessione.</td></tr>';
     }
 }
 
@@ -162,7 +168,7 @@ function renderMachineFirewallRules() {
     tbody.innerHTML = '';
 
     if (machineFirewallRules.length === 0) {
-        tbody.innerHTML = '<tr><td colspan="11" class="text-center text-muted">Nessuna regola firewall definita.</td></tr>';
+        tbody.innerHTML = '<tr><td colspan="12" class="text-center text-muted">Nessuna regola firewall definita.</td></tr>';
         return;
     }
 
@@ -176,15 +182,6 @@ function renderMachineFirewallRules() {
         if (rule.action === 'DROP') badgeClass = 'bg-danger';
         if (rule.action === 'REJECT') badgeClass = 'bg-warning';
         if (rule.action === 'MASQUERADE') badgeClass = 'bg-info';
-
-        const ruleDescriptionHtml = `
-            <strong>Azione:</strong> <span class="badge ${badgeClass}">${rule.action}</span><br>
-            <strong>Chain:</strong> ${rule.chain}<br>
-            <strong>Protocollo:</strong> ${rule.protocol ? rule.protocol.toUpperCase() : 'ANY'}<br>
-            <strong>Destinazione:</strong> <code>${rule.destination || 'ANY'}</code><br>
-            <strong>Porta:</strong> ${rule.port || '*'}<br>
-            <strong>Sorgente:</strong> ${rule.source || 'ANY'}
-        `;
 
         tr.innerHTML = `
             <td>
@@ -201,16 +198,17 @@ function renderMachineFirewallRules() {
             <td>${rule.table}</td>
             <td>${rule.chain}</td>
             <td>${rule.protocol ? rule.protocol.toUpperCase() : 'ANY'}</td>
-            <td>${rule.source || 'ANY'}</td>
+            <td><code>${rule.source || 'ANY'}</code></td>
             <td><code>${rule.destination || 'ANY'}</code></td>
             <td>${rule.port || '*'}</td>
             <td>${rule.in_interface || '*'}</td>
             <td>${rule.out_interface || '*'}</td>
+            <td>${rule.comment || ''}</td>
             <td class="text-end">
-                <button class="btn btn-sm btn-ghost-primary" onclick="openEditMachineRuleModal('${rule.id}')">
+                <button class="btn btn-sm btn-ghost-primary" onclick="openEditMachineRuleModal('${rule.id}')" title="Modifica">
                     <i class="ti ti-edit"></i>
                 </button>
-                <button class="btn btn-sm btn-ghost-danger" onclick="confirmDeleteMachineRule('${rule.id}')">
+                <button class="btn btn-sm btn-ghost-danger" onclick="confirmDeleteMachineRule('${rule.id}')" title="Elimina">
                     <i class="ti ti-trash"></i>
                 </button>
             </td>
@@ -224,7 +222,7 @@ async function addMachineFirewallRule() {
     const ruleData = {
         chain: form.elements['chain'].value,
         action: form.elements['action'].value,
-        protocol: form.elements['protocol'].value === 'all' ? null : form.elements['protocol'].value,
+        protocol: form.elements['protocol'].value || null,
         source: form.elements['source'].value || null,
         destination: form.elements['destination'].value || null,
         port: form.elements['port'].value || null,
@@ -252,8 +250,7 @@ async function addMachineFirewallRule() {
         if (result.success) {
             showNotification('success', 'Regola firewall globale aggiunta con successo.');
             bootstrap.Modal.getInstance(document.getElementById('modal-add-machine-rule')).hide();
-            form.reset(); // Clear form
-            loadMachineFirewallRules();
+            await loadMachineFirewallRules();
         } else {
             showNotification('danger', 'Errore aggiunta regola: ' + (result.body.detail || 'Sconosciuto'));
         }
@@ -281,7 +278,7 @@ function confirmDeleteMachineRule(ruleId) {
         <strong>Protocollo:</strong> ${rule.protocol ? rule.protocol.toUpperCase() : 'ANY'}<br>
         <strong>Destinazione:</strong> <code>${rule.destination || 'ANY'}</code><br>
         <strong>Porta:</strong> ${rule.port || '*'}<br>
-        <strong>Sorgente:</strong> ${rule.source || 'ANY'}
+        <strong>Sorgente:</strong> <code>${rule.source || 'ANY'}</code>
     `;
 
     document.getElementById('delete-machine-rule-summary').innerHTML = ruleDescriptionHtml;
@@ -292,14 +289,13 @@ function confirmDeleteMachineRule(ruleId) {
 async function performDeleteMachineRule(ruleId) {
     try {
         const response = await fetch(`${API_AJAX_HANDLER}?action=delete_machine_firewall_rule&rule_id=${encodeURIComponent(ruleId)}`, {
-            method: 'DELETE',
-            headers: { 'Content-Type': 'application/json' },
+            method: 'DELETE'
         });
         const result = await response.json();
 
         if (result.success) {
             showNotification('success', 'Regola firewall globale eliminata.');
-            loadMachineFirewallRules();
+            await loadMachineFirewallRules();
         } else {
             showNotification('danger', 'Errore eliminazione regola: ' + (result.body.detail || 'Sconosciuto'));
         }
@@ -315,19 +311,16 @@ async function moveMachineRule(ruleId, direction) {
     const newIndex = index + direction;
     if (newIndex < 0 || newIndex >= machineFirewallRules.length) return;
 
-    // Temporarily swap order values
-    [machineFirewallRules[index].order, machineFirewallRules[newIndex].order] = 
-    [machineFirewallRules[newIndex].order, machineFirewallRules[index].order];
-    
-    // Ensure all orders are consecutive (important for backend reordering)
-    machineFirewallRules.sort((a,b) => a.order - b.order);
-    for(let i=0; i < machineFirewallRules.length; i++) {
-        machineFirewallRules[i].order = i;
-    }
+    // Swap the actual elements in the array
+    [machineFirewallRules[index], machineFirewallRules[newIndex]] = [machineFirewallRules[newIndex], machineFirewallRules[index]];
 
-    renderMachineFirewallRules(); // Update UI immediately
+    // Re-assign all order numbers based on the new array positions
+    machineFirewallRules.forEach((rule, i) => {
+        rule.order = i;
+    });
 
-    // Backend call to apply the new order
+    // Now the local state is correct. Re-render and tell the backend.
+    renderMachineFirewallRules();
     await applyMachineFirewallRules();
 }
 
@@ -349,15 +342,20 @@ async function applyMachineFirewallRules() {
             showNotification('success', 'Modifiche alle regole firewall globali applicate con successo.');
         } else {
             showNotification('danger', 'Errore applicazione regole: ' + (result.body.detail || 'Sconosciuto'));
+            // If applying fails, reload the state from the server to prevent UI inconsistencies
+            await loadMachineFirewallRules();
         }
     } catch (e) {
         showNotification('danger', 'Errore di connessione: ' + e.message);
+        await loadMachineFirewallRules();
     }
 }
 
 
-function toggleMachinePortInput(protocol) {
-    const portContainer = document.getElementById('machine-port-container');
+function toggleMachinePortInput(protocol, modalType) {
+    const portContainer = document.getElementById(`machine-port-container-${modalType}`);
+    if (!portContainer) return;
+    
     if (protocol === 'tcp' || protocol === 'udp') {
         portContainer.style.display = 'block';
     } else {
@@ -402,17 +400,15 @@ function renderNetworkInterfaces() {
     networkInterfaces.forEach(iface => {
         const tr = document.createElement('tr');
         
-        // Determine IP display
         let ipDisplay = 'N/A';
         let cidrDisplay = 'N/A';
         let netmaskDisplay = 'N/A';
 
         if (iface.configured_ips && iface.configured_ips.length > 0) {
-            const primaryIp = iface.configured_ips[0]; // Assuming first IP is primary for display
+            const primaryIp = iface.configured_ips[0];
             ipDisplay = primaryIp.ip;
             cidrDisplay = primaryIp.cidr;
             netmaskDisplay = primaryIp.netmask;
-            // Handle multiple IPs for display if needed
             if (iface.configured_ips.length > 1) {
                 ipDisplay += ` (+${iface.configured_ips.length - 1})`;
             }
@@ -442,22 +438,19 @@ async function openEditNetworkInterfaceModal(interfaceName) {
         return;
     }
 
-    // Populate static fields
     document.getElementById('edit-interface-name').textContent = currentEditingInterface.name;
     document.getElementById('edit-interface-hidden-name').value = currentEditingInterface.name;
     document.getElementById('edit-interface-mac').textContent = currentEditingInterface.mac_address || 'N/A';
     document.getElementById('edit-interface-link-status').textContent = currentEditingInterface.link_status || 'UNKNOWN';
 
-    // Fetch current netplan config for this interface
     try {
         const response = await fetch(`${API_AJAX_HANDLER}?action=get_machine_network_interface_config&interface_name=${encodeURIComponent(interfaceName)}`);
         const result = await response.json();
 
         if (result.success) {
-            const config = result.body; // This is the netplan config for 'ethernets.interfaceName'
+            const config = result.body;
             
-            // Determine IP method
-            let ipMethod = 'dhcp'; // Default
+            let ipMethod = 'dhcp';
             if (config && config.dhcp4 === false && config.addresses && config.addresses.length > 0) {
                 ipMethod = 'static';
             } else if (config && config.dhcp4 === false && (!config.addresses || config.addresses.length === 0)) {
@@ -465,19 +458,18 @@ async function openEditNetworkInterfaceModal(interfaceName) {
             }
             document.getElementById('edit-interface-ip-method').value = ipMethod;
 
-            // Populate static IP fields if method is static
             const ipAddressesContainer = document.getElementById('static-ip-addresses-container');
-            ipAddressesContainer.innerHTML = ''; // Clear previous fields
+            ipAddressesContainer.innerHTML = '';
             if (ipMethod === 'static' && config.addresses && config.addresses.length > 0) {
                 config.addresses.forEach(addr => addIpAddressField(addr));
             } else {
-                addIpAddressField(); // Add one empty field for convenience
+                addIpAddressField();
             }
 
             document.getElementById('edit-interface-gateway').value = (config.routes && config.routes.length > 0) ? config.routes[0].via : '';
             document.getElementById('edit-interface-nameservers').value = (config.nameservers && config.nameservers.addresses) ? config.nameservers.addresses.join(', ') : '';
 
-            toggleIpConfigFields(ipMethod); // Show/hide fields based on method
+            toggleIpConfigFields(ipMethod);
             new bootstrap.Modal(document.getElementById('modal-edit-network-interface')).show();
 
         } else {
@@ -523,10 +515,9 @@ async function saveNetworkInterfaceConfig() {
         document.querySelectorAll('#static-ip-addresses-container input').forEach(input => {
             const val = input.value.trim();
             if (val) {
-                // Basic validation for IP/CIDR
                 if (!/^(\d{1,3}\.){3}\d{1,3}\/\d{1,2}$/.test(val)) {
                      showNotification('danger', `Indirizzo IP non valido: ${val}`);
-                     return; // Skip invalid IP
+                     return;
                 }
                 ipAddresses.push(val);
             }
@@ -565,7 +556,7 @@ async function saveNetworkInterfaceConfig() {
         if (result.success) {
             showNotification('success', 'Configurazione interfaccia salvata e applicata con successo.');
             bootstrap.Modal.getInstance(document.getElementById('modal-edit-network-interface')).hide();
-            loadNetworkInterfaces(); // Reload interfaces to reflect changes
+            loadNetworkInterfaces();
         } else {
             showNotification('danger', 'Errore salvataggio configurazione: ' + (result.body.detail || 'Sconosciuto'));
         }
@@ -576,6 +567,174 @@ async function saveNetworkInterfaceConfig() {
 
 // Global notification function (assuming it's defined in header or a common utils)
 // function showNotification(type, message) { ... }
+
+function openEditMachineRuleModal(ruleId) {
+    const rule = machineFirewallRules.find(r => r.id === ruleId);
+    if (!rule) {
+        showNotification('danger', 'Regola non trovata per la modifica.');
+        return;
+    }
+
+    const form = document.getElementById('editMachineRuleForm');
+    form.elements['id'].value = rule.id;
+    form.elements['table'].value = rule.table;
+    form.elements['action'].value = rule.action;
+    form.elements['protocol'].value = rule.protocol || '';
+    form.elements['source'].value = rule.source || '';
+    form.elements['destination'].value = rule.destination || '';
+    form.elements['port'].value = rule.port || '';
+    form.elements['in_interface'].value = rule.in_interface || '';
+    form.elements['out_interface'].value = rule.out_interface || '';
+    form.elements['state'].value = rule.state || '';
+    form.elements['comment'].value = rule.comment || '';
+
+    // Update chain options for the specific table and select the correct one
+    const chainSelect = form.elements['chain'];
+    const selectedTable = rule.table;
+    chainSelect.innerHTML = '';
+    const options = chainOptionsMap[selectedTable] || [];
+    options.forEach(optionValue => {
+        const option = document.createElement('option');
+        option.value = optionValue;
+        option.textContent = optionValue;
+        if (optionValue === rule.chain) {
+            option.selected = true;
+        }
+        chainSelect.appendChild(option);
+    });
+
+    toggleMachinePortInput(rule.protocol, 'edit');
+    updateIptablesPreviewEditModal(); // Set initial preview
+
+    new bootstrap.Modal(document.getElementById('modal-edit-machine-rule')).show();
+}
+
+async function updateMachineFirewallRule() {
+    const form = document.getElementById('editMachineRuleForm');
+    const ruleId = form.elements['id'].value;
+
+    const ruleData = {
+        id: ruleId,
+        chain: form.elements['chain'].value,
+        action: form.elements['action'].value,
+        protocol: form.elements['protocol'].value || null,
+        source: form.elements['source'].value || null,
+        destination: form.elements['destination'].value || null,
+        port: form.elements['port'].value || null,
+        in_interface: form.elements['in_interface'].value || null,
+        out_interface: form.elements['out_interface'].value || null,
+        state: form.elements['state'].value || null,
+        comment: form.elements['comment'].value || null,
+        table: form.elements['table'].value
+    };
+
+    if (!ruleData.chain || !ruleData.action) {
+        showNotification('danger', 'Chain e Azione sono campi obbligatori.');
+        return;
+    }
+
+    try {
+        const response = await fetch(`${API_AJAX_HANDLER}?action=update_machine_firewall_rule&rule_id=${encodeURIComponent(ruleId)}`, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(ruleData)
+        });
+        const result = await response.json();
+
+        if (result.success) {
+            showNotification('success', 'Regola firewall aggiornata con successo.');
+            bootstrap.Modal.getInstance(document.getElementById('modal-edit-machine-rule')).hide();
+            await loadMachineFirewallRules();
+        } else {
+            showNotification('danger', 'Errore aggiornamento regola: ' + (result.body.detail || 'Sconosciuto'));
+        }
+    } catch (e) {
+        showNotification('danger', 'Errore di connessione: ' + e.message);
+    }
+}
+
+// --- Preview and dynamic inputs for Edit Modal ---
+document.addEventListener('DOMContentLoaded', () => {
+    const editRuleModal = document.getElementById('modal-edit-machine-rule');
+    if (editRuleModal) {
+        const form = document.getElementById('editMachineRuleForm');
+        form.querySelectorAll('input, select').forEach(input => {
+            input.addEventListener('input', updateIptablesPreviewEditModal);
+            input.addEventListener('change', updateIptablesPreviewEditModal);
+        });
+        form.elements['table'].addEventListener('change', () => {
+            // Get the correct chain dropdown for the edit modal
+            const chainSelect = form.elements['chain'];
+            const selectedTable = form.elements['table'].value;
+            
+            chainSelect.innerHTML = '';
+            const options = chainOptionsMap[selectedTable] || [];
+            options.forEach(optionValue => {
+                const option = document.createElement('option');
+                option.value = optionValue;
+                option.textContent = optionValue;
+                chainSelect.appendChild(option);
+            });
+            updateIptablesPreviewEditModal();
+        });
+    }
+});
+
+function updateIptablesPreviewEditModal() {
+    const form = document.getElementById('editMachineRuleForm');
+    const previewCode = document.getElementById('iptables-preview-edit');
+    if (!form || !previewCode) return;
+
+    const table = form.elements['table'].value;
+    const chain = form.elements['chain'].value || 'CHAIN';
+    const action = form.elements['action'].value.toUpperCase();
+    const protocol = form.elements['protocol'].value;
+    const source = form.elements['source'].value;
+    const destination = form.elements['destination'].value;
+    const port = form.elements['port'].value;
+    const inInterface = form.elements['in_interface'].value;
+    const outInterface = form.elements['out_interface'].value;
+    const state = form.elements['state'].value;
+    const comment = form.elements['comment'].value;
+
+    let command = ['iptables'];
+    if (table !== 'filter') {
+        command.push('-t', table);
+    }
+    // For preview, we show -A, but the backend will use -I for ordering
+    command.push('-A', chain);
+
+    if (inInterface) command.push('-i', inInterface);
+    if (outInterface) command.push('-o', outInterface);
+    if (source) command.push('-s', source);
+    if (destination && !['SNAT', 'DNAT'].includes(action)) command.push('-d', destination);
+    
+    if (protocol) {
+        command.push('-p', protocol);
+        if (port && (protocol === 'tcp' || protocol === 'udp')) {
+            command.push('--dport', port);
+        }
+    }
+
+    if (state) {
+        command.push('-m', 'state', '--state', state);
+    }
+    
+    if (comment) {
+        command.push('-m', 'comment', '--comment', `"${comment}"`);
+    }
+
+    command.push('-j', action);
+
+    if (action === 'SNAT' && destination) {
+        command.push('--to-source', destination);
+    }
+    if (action === 'DNAT' && destination) {
+        command.push('--to-destination', destination);
+    }
+
+    previewCode.textContent = command.join(' ');
+}
 
 function openEditMachineRuleModal(ruleId) {
     const rule = machineFirewallRules.find(r => r.id === ruleId);
