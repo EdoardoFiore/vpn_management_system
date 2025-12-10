@@ -348,6 +348,25 @@ async def create_rule(request: RuleRequest):
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
+@app.put("/api/firewall/rules/{rule_id}", dependencies=[Depends(get_api_key)])
+async def update_rule(rule_id: str, request: RuleRequest):
+    try:
+        # Note: The group_id is part of the request model, but we also pass rule_id from path
+        updated_rule = instance_firewall_manager.update_rule(
+            rule_id=rule_id,
+            group_id=request.group_id, # Must be provided in the request body
+            action=request.action,
+            protocol=request.protocol,
+            destination=request.destination,
+            port=request.port,
+            description=request.description
+        )
+        return updated_rule
+    except ValueError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
 @app.delete("/api/firewall/rules/{rule_id}", dependencies=[Depends(get_api_key)])
 async def delete_rule(rule_id: str):
     instance_firewall_manager.delete_rule(rule_id)

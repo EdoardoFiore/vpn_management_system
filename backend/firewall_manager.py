@@ -249,6 +249,31 @@ def update_rule_order(rule_orders: List[Dict[str, int]]):
     _save_rules(rules)
     apply_firewall_rules()
 
+def update_rule(rule_id: str, group_id: str, action: str, protocol: str, destination: str, port: Optional[str] = None, description: str = "") -> Rule:
+    rules = _load_rules()
+    rule_to_update = next((r for r in rules if r.id == rule_id and r.group_id == group_id), None)
+
+    if not rule_to_update:
+        raise ValueError(f"Rule with ID {rule_id} not found in group {group_id}")
+
+    # Update fields
+    rule_to_update.action = action
+    rule_to_update.protocol = protocol
+    rule_to_update.destination = destination
+    rule_to_update.port = port
+    rule_to_update.description = description
+    
+    # Re-validate the updated rule (especially port based on protocol)
+    try:
+        updated_rule_data = rule_to_update.dict()
+        validated_rule = Rule(**updated_rule_data) # This will run validators
+    except ValueError as e:
+        raise ValueError(f"Invalid rule data after update: {e}")
+
+    _save_rules(rules)
+    apply_firewall_rules()
+    return validated_rule
+
 def get_rules(group_id: Optional[str] = None) -> List[Rule]:
     rules = _load_rules()
     if group_id:

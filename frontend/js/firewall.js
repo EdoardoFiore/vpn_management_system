@@ -372,7 +372,10 @@ function renderRules(rules) {
             <td><code>${rule.destination}</code></td>
             <td>${rule.port || '*'}</td>
             <td class="text-end">
-                <button class="btn btn-sm btn-ghost-danger" onclick="confirmDeleteRule('${rule.id}')">
+                <button class="btn btn-sm btn-ghost-primary" onclick="openEditRuleModal('${rule.id}')" title="Modifica">
+                    <i class="ti ti-edit"></i>
+                </button>
+                <button class="btn btn-sm btn-ghost-danger" onclick="confirmDeleteRule('${rule.id}')" title="Elimina">
                     <i class="ti ti-trash"></i>
                 </button>
             </td>
@@ -384,14 +387,31 @@ function renderRules(rules) {
     window.currentRules = rules;
 }
 
-function togglePortInput() {
-    const proto = document.getElementById('rule-proto').value;
-    const portContainer = document.getElementById('port-container');
-    if (proto === 'tcp' || proto === 'udp') {
+// Modified `togglePortInput` to accept a modalType
+function togglePortInput(protocol, modalType = 'add') {
+    let portContainerId;
+    let portInputId;
+
+    if (modalType === 'add') {
+        portContainerId = 'port-container';
+        portInputId = 'rule-port';
+    } else if (modalType === 'edit') {
+        portContainerId = 'edit-port-container';
+        portInputId = 'edit-rule-port';
+    } else {
+        return; // Invalid modalType
+    }
+
+    const portContainer = document.getElementById(portContainerId);
+    const portInput = document.getElementById(portInputId);
+
+    if (!portContainer) return;
+    
+    if (protocol === 'tcp' || protocol === 'udp') {
         portContainer.style.display = 'block';
     } else {
         portContainer.style.display = 'none';
-        document.getElementById('rule-port').value = '';
+        if (portInput) portInput.value = ''; // Clear value when hidden
     }
 }
 
@@ -486,9 +506,18 @@ async function createRule() {
     }
 }
 
-function openAddRuleModal() {
-    const modal = new bootstrap.Modal(document.getElementById('modal-add-rule'));
-    modal.show();
+// Renamed and modified `openAddRuleModal` for creating new rules
+function openCreateRuleModal() {
+    // Reset the form fields for a new rule
+    document.getElementById('rule-action').value = 'ACCEPT';
+    document.getElementById('rule-proto').value = 'tcp';
+    document.getElementById('rule-dest').value = '';
+    document.getElementById('rule-port').value = '';
+    document.getElementById('rule-desc').value = '';
+    // Ensure port input visibility is correct for default protocol
+    togglePortInput('tcp', 'add'); 
+
+    new bootstrap.Modal(document.getElementById('modal-add-rule')).show();
 }
 
 // New function to show the confirmation modal
@@ -535,6 +564,119 @@ async function performDeleteRule(ruleId) {
     }
 }
 
+// Function to open the Edit Rule Modal and populate it
+function openEditRuleModal(ruleId) {
+    const rule = window.currentRules.find(r => r.id === ruleId);
+    if (!rule) {
+        showNotification('danger', 'Regola non trovata per la modifica.');
+        return;
+    }
+    
+    window.currentEditingRule = rule; // Store the rule being edited
+
+    // Populate the form fields
+    document.getElementById('rule-id').value = rule.id;
+    document.getElementById('edit-rule-action').value = rule.action;
+    document.getElementById('edit-rule-proto').value = rule.protocol;
+    document.getElementById('edit-rule-dest').value = rule.destination;
+    document.getElementById('edit-rule-port').value = rule.port || '';
+    document.getElementById('edit-rule-desc').value = rule.description || '';
+
+    // Adjust port input visibility based on protocol
+    togglePortInput(rule.protocol, 'edit');
+
+    new bootstrap.Modal(document.getElementById('modal-edit-rule')).show();
+}
+
+async function updateRule() {
+    const ruleId = document.getElementById('rule-id').value;
+    const action = document.getElementById('edit-rule-action').value;
+    const proto = document.getElementById('edit-rule-proto').value;
+    const destInput = document.getElementById('edit-rule-dest');
+    const portInput = document.getElementById('edit-rule-port');
+    const descInput = document.getElementById('edit-rule-desc');
+
+    // --- VALIDATION ---
+    let isValid = true;
+    const dest = destInput.value.trim();
+    let port = portInput.value.trim(); // Use let to allow modification
+
+    // Reset validation
+    destInput.classList.remove('is-invalid');
+    portInput.classList.remove('is-invalid');
+
+    const cidrRegex = /^([0-9]{1,3}\.){3}[0-9]{1,3}(\/([0-9]|[1-2][0-9]|3[0-2]))?$/;
+    const portRegex = /^\d{1,5}$/;
+    const portRangeRegex = /^\d{1,5}:\d{1,5}$/;
+
+    if (dest === '' || (!cidrRegex.test(dest) && dest.toLowerCase() !== 'any')) {
+        isValid = false;
+        destInput.classList.add('is-invalid');
+    }
+
+    if (port !== '' && (proto === 'tcp' || proto === 'udp')) {
+        if (portRegex.test(port)) {
+            const portNum = parseInt(port, 10);
+            if (portNum < 1 || portNum > 65535) {
+                isValid = false;
+                portInput.classList.add('is-invalid');
+            }
+        } else if (portRangeRegex.test(port)) {
+            const [start, end] = port.split(':').map(p => parseInt(p, 10));
+            if (start < 1 || start > 65535 || end < 1 || end > 65535 || start >= end) {
+                isValid = false;
+                portInput.classList.add('is-invalid');
+            }
+        } else {
+            isValid = false;
+            portInput.classList.add('is-invalid');
+        }
+    } else if (port !== '' && (proto !== 'tcp' && proto !== 'udp')) {
+        isValid = false;
+        portInput.classList.add('is-invalid');
+    }
+
+    if (!isValid) {
+        showNotification('danger', 'Uno o più campi della regola non sono validi.');
+        return;
+    }
+    // --- END VALIDATION ---
+
+    // Sanitize payload: ensure port is null for non-TCP/UDP protocols
+    if (proto !== 'tcp' && proto !== 'udp') {
+        port = null;
+    }
+
+    try {
+        const response = await fetch(`${API_AJAX_HANDLER}`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                action: 'update_rule',
+                rule_id: ruleId,
+                group_id: currentGroupId, // Ensure group_id is sent
+                action_type: action, // Changed from 'action' to 'action_type' to avoid conflict with 'action' for API call
+                protocol: proto,
+                destination: dest,
+                port: port,
+                description: descInput.value
+            })
+        });
+
+        const result = await response.json();
+        if (result.success) {
+            showNotification('success', 'Regola firewall aggiornata con successo.');
+            bootstrap.Modal.getInstance(document.getElementById('modal-edit-rule')).hide();
+            loadRules(currentGroupId);
+        } else {
+            showNotification('danger', 'Errore aggiornamento regola: ' + (result.body.detail || 'Sconosciuto'));
+        }
+    } catch (e) {
+        showNotification('danger', 'Errore di connessione: ' + e.message);
+    }
+}
+
+
 async function applyRuleOrder() {
     if (!window.currentRules) return;
 
@@ -574,3 +716,4 @@ async function saveInstanceFirewallPolicy() {
         showNotification("danger", "Errore: Istanza non selezionata.");
         return;
     }
+}

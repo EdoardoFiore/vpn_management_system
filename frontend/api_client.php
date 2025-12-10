@@ -192,6 +192,17 @@ function create_rule($group_id, $action, $protocol, $destination, $port = null, 
     ]);
 }
 
+function update_group_firewall_rule($rule_id, $group_id, $action, $protocol, $destination, $port = null, $description = '') {
+    return api_request('/firewall/rules/' . urlencode($rule_id), 'PUT', [
+        'group_id' => $group_id, // Needed for backend to locate the rule's group context
+        'action' => $action,
+        'protocol' => $protocol,
+        'port' => $port,
+        'destination' => $destination,
+        'description' => $description
+    ]);
+}
+
 function delete_rule($rule_id) {
     return api_request('/firewall/rules/' . urlencode($rule_id), 'DELETE');
 }

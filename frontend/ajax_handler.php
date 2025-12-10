@@ -241,6 +241,25 @@ switch ($action) {
          echo json_encode($response);
          break;
 
+    case 'update_rule':
+        $input = file_get_contents('php://input');
+        $data = json_decode($input, true);
+        if (!$data || !isset($data['rule_id']) || !isset($data['group_id']) || !isset($data['action_type']) || !isset($data['protocol']) || !isset($data['destination'])) {
+            echo json_encode(['success' => false, 'body' => ['detail' => 'Dati mancanti per aggiornare la regola del gruppo.']]);
+            exit;
+        }
+        $response = update_group_firewall_rule(
+            $data['rule_id'],
+            $data['group_id'],
+            $data['action_type'],
+            $data['protocol'],
+            $data['destination'],
+            $data['port'] ?? null,
+            $data['description'] ?? ''
+        );
+        echo json_encode($response);
+        break;
+
     case 'update_instance_firewall_policy':
         $input = file_get_contents('php://input');
         $data = json_decode($input, true);
