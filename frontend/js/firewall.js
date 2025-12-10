@@ -383,6 +383,28 @@ function renderRules(rules) {
         tbody.appendChild(tr);
     });
 
+    // Add a virtual rule for the instance's default firewall policy at the end
+    if (currentInstance && currentInstance.firewall_default_policy) {
+        const defaultPolicy = currentInstance.firewall_default_policy.toUpperCase();
+        let badgeClass = 'bg-secondary';
+        if (defaultPolicy === 'ACCEPT') badgeClass = 'bg-success';
+        if (defaultPolicy === 'DROP') badgeClass = 'bg-danger';
+
+        const trDefault = document.createElement('tr');
+        trDefault.className = 'table-secondary'; // Style to distinguish it
+        trDefault.innerHTML = `
+            <td></td>
+            <td><span class="badge ${badgeClass}">${defaultPolicy}</span></td>
+            <td>ANY</td>
+            <td><code>ANY</code></td>
+            <td>*</td>
+            <td class="text-end">
+                <span class="text-muted" title="Regola di default dell'istanza. Non modificabile qui.">Default Instance Policy</span>
+            </td>
+        `;
+        tbody.appendChild(trDefault);
+    }
+
     // Store current rules to handle reordering logic locally before saving
     window.currentRules = rules;
 }

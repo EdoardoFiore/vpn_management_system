@@ -240,7 +240,7 @@ require_once 'includes/header.php';
                         <div class="card-header">
                             <h3 class="card-title">Regole Firewall</h3>
                             <div class="card-actions">
-                                <button class="btn btn-sm btn-primary" onclick="openAddRuleModal()">Aggiungi Regola</button>
+                                <button class="btn btn-sm btn-primary" onclick="openCreateRuleModal()">Aggiungi Regola</button>
                             </div>
                         </div>
                         <div class="card-table table-responsive">
