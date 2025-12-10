@@ -59,6 +59,17 @@ L'installazione è progettata per essere "Zero Config": cloni la repository, lan
     *   A ogni client aggiunto a un gruppo viene assegnato un IP statico per garantire la coerenza delle regole.
     *   Gestisci l'ordine di priorità delle regole direttamente dall'interfaccia.
 
+*   **Firewall Globale della Macchina**:
+    *   Crea, modifica ed elimina regole `iptables` per il firewall dell'host direttamente dall'interfaccia web.
+    *   Supporto completo per tabelle (`filter`, `nat`), chain, azioni, protocolli, IP, porte e stati di connessione.
+    *   Gestisci l'ordine di priorità delle regole con un semplice drag-and-drop.
+    *   Un sistema di aiuto integrato e un'anteprima del comando `iptables` rendono la creazione delle regole semplice e a prova di errore.
+
+*   **Gestione Interfacce di Rete**:
+    *   Visualizza tutte le interfacce di rete della macchina con i relativi dettagli (MAC, stato, IP).
+    *   Configura il metodo di assegnazione IP per ogni interfaccia (DHCP o Statico).
+    *   Imposta indirizzi IP statici, gateway e server DNS direttamente dalla dashboard (richiede `netplan`).
+
 ---
 
 ## 🛠 Come Funziona (Backend e Architettura)
