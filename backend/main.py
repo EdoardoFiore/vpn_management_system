@@ -513,4 +513,3 @@ async def apply_global_netplan_config():
 @app.get("/")
 async def root():
     return {"message": "OpenVPN Management API v2 is running."}
-

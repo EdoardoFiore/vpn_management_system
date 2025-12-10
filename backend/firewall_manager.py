@@ -323,7 +323,7 @@ def apply_firewall_rules():
     # 4. Re-create all chains
     logger.info("Creating new chains...")
     for chain in all_chains:
-        _run_iptables(["iptables", "-N", chain])
+        _run_iptables(["iptables", "-N", chain], suppress_errors=True)
         
     # 5. Ensure main jump from FORWARD chain exists and is at the top
     # Check if rule exists

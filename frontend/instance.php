@@ -320,6 +320,59 @@ require_once 'includes/header.php';
     </div>
 </div>
 
+<!-- Modal Add Rule -->
+<div class="modal modal-blur fade" id="modal-add-rule" tabindex="-1" role="dialog" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered" role="document">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">Nuova Regola Firewall</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <form id="addRuleForm">
+                    <div class="row">
+                        <div class="col-md-6 mb-3">
+                            <label class="form-label">Azione</label>
+                            <select class="form-select" id="rule-action" name="action">
+                                <option value="ACCEPT">ACCEPT (Consenti)</option>
+                                <option value="DROP">DROP (Blocca)</option>
+                                <option value="REJECT">REJECT (Rifiuta)</option>
+                            </select>
+                        </div>
+                        <div class="col-md-6 mb-3">
+                            <label class="form-label">Protocollo</label>
+                            <select class="form-select" id="rule-proto" name="protocol" onchange="togglePortInput(this.value, 'add')">
+                                <option value="tcp">TCP</option>
+                                <option value="udp">UDP</option>
+                                <option value="icmp">ICMP</option>
+                                <option value="all">Tutti (ALL)</option>
+                            </select>
+                        </div>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Destinazione (CIDR o IP)</label>
+                        <input type="text" class="form-control" id="rule-dest" name="destination" placeholder="0.0.0.0/0 per tutto, o 192.168.1.50">
+                        <div class="invalid-feedback">Destinazione non valida. Inserisci un IP, un CIDR o 'any'.</div>
+                    </div>
+                    <div class="mb-3" id="port-container">
+                        <label class="form-label">Porta (Opzionale)</label>
+                        <input type="text" class="form-control" id="rule-port" name="port" placeholder="80, 443, 1000:2000">
+                        <div class="invalid-feedback">Porta non valida. Inserisci un numero (1-65535) o un intervallo (es. 1000:2000).</div>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Descrizione</label>
+                        <input type="text" class="form-control" id="rule-desc" name="description">
+                    </div>
+                </form>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn me-auto" data-bs-dismiss="modal">Annulla</button>
+                <button type="button" class="btn btn-primary" onclick="createRule()">Aggiungi Regola</button>
+            </div>
+        </div>
+    </div>
+</div>
+
 <!-- Modal Edit Rule -->
 <div class="modal modal-blur fade" id="modal-edit-rule" tabindex="-1" role="dialog" aria-hidden="true">
     <div class="modal-dialog modal-dialog-centered" role="document">

@@ -350,62 +350,70 @@ function renderRules(rules) {
 
     if (rules.length === 0) {
         tbody.innerHTML = '<tr><td colspan="6" class="text-center text-muted">Nessuna regola definita.</td></tr>';
-        return;
+        // DO NOT RETURN HERE - allow default policy row to be appended
+    } else {
+        rules.sort((a, b) => a.order - b.order);
+
+        rules.forEach((rule, index) => {
+            const tr = document.createElement('tr');
+            tr.dataset.id = rule.id;
+
+            let badgeClass = 'bg-secondary';
+            if (rule.action === 'ACCEPT') badgeClass = 'bg-success';
+            if (rule.action === 'DROP') badgeClass = 'bg-danger';
+
+            tr.innerHTML = `
+                <td class="w-1" style="cursor: grab;">
+                    <i class="ti ti-grip-vertical"></i>
+                </td>
+                <td><span class="badge ${badgeClass}">${rule.action}</span></td>
+                <td>${rule.protocol.toUpperCase()}</td>
+                <td><code>${rule.destination}</code></td>
+                <td>${rule.port || '*'}</td>
+                <td class="text-end">
+                    <button class="btn btn-sm btn-ghost-primary" onclick="openEditRuleModal('${rule.id}')" title="Modifica">
+                        <i class="ti ti-edit"></i>
+                    </button>
+                    <button class="btn btn-sm btn-ghost-danger" onclick="confirmDeleteRule('${rule.id}')" title="Elimina">
+                        <i class="ti ti-trash"></i>
+                    </button>
+                </td>
+            `;
+            tbody.appendChild(tr);
+        });
     }
 
-    rules.sort((a, b) => a.order - b.order);
+    // Always add a virtual rule for the instance's default firewall policy at the end
+    const trDefault = document.createElement('tr');
+    trDefault.className = 'table-secondary'; // Style to distinguish it
+    
+    let defaultPolicyDisplay = 'N/A';
+    let defaultPolicyBadgeClass = 'bg-secondary';
+    let defaultPolicyTitle = 'Policy di default dell\'istanza (caricamento...)';
 
-    rules.forEach((rule, index) => {
-        const tr = document.createElement('tr');
-        tr.dataset.id = rule.id;
-
-        let badgeClass = 'bg-secondary';
-        if (rule.action === 'ACCEPT') badgeClass = 'bg-success';
-        if (rule.action === 'DROP') badgeClass = 'bg-danger';
-
-        tr.innerHTML = `
-            <td class="w-1" style="cursor: grab;">
-                <i class="ti ti-grip-vertical"></i>
-            </td>
-            <td><span class="badge ${badgeClass}">${rule.action}</span></td>
-            <td>${rule.protocol.toUpperCase()}</td>
-            <td><code>${rule.destination}</code></td>
-            <td>${rule.port || '*'}</td>
-            <td class="text-end">
-                <button class="btn btn-sm btn-ghost-primary" onclick="openEditRuleModal('${rule.id}')" title="Modifica">
-                    <i class="ti ti-edit"></i>
-                </button>
-                <button class="btn btn-sm btn-ghost-danger" onclick="confirmDeleteRule('${rule.id}')" title="Elimina">
-                    <i class="ti ti-trash"></i>
-                </button>
-            </td>
-        `;
-        tbody.appendChild(tr);
-    });
-
-    // Add a virtual rule for the instance's default firewall policy at the end
     if (currentInstance && currentInstance.firewall_default_policy) {
         const defaultPolicy = currentInstance.firewall_default_policy.toUpperCase();
-        let badgeClass = 'bg-secondary';
-        if (defaultPolicy === 'ACCEPT') badgeClass = 'bg-success';
-        if (defaultPolicy === 'DROP') badgeClass = 'bg-danger';
-
-        const trDefault = document.createElement('tr');
-        trDefault.className = 'table-secondary'; // Style to distinguish it
-        trDefault.innerHTML = `
-            <td></td>
-            <td><span class="badge ${badgeClass}">${defaultPolicy}</span></td>
-            <td>ANY</td>
-            <td><code>ANY</code></td>
-            <td>*</td>
-            <td class="text-end">
-                <span class="text-muted" title="Regola di default dell'istanza. Non modificabile qui.">Default Instance Policy</span>
-            </td>
-        `;
-        tbody.appendChild(trDefault);
+        defaultPolicyDisplay = defaultPolicy;
+        if (defaultPolicy === 'ACCEPT') defaultPolicyBadgeClass = 'bg-success';
+        if (defaultPolicy === 'DROP') defaultPolicyBadgeClass = 'bg-danger';
+        defaultPolicyTitle = 'Regola di default dell\'istanza. Non modificabile qui.';
     }
 
+    trDefault.innerHTML = `
+        <td></td>
+        <td><span class="badge ${defaultPolicyBadgeClass}">${defaultPolicyDisplay}</span></td>
+        <td>ANY</td>
+        <td><code>ANY</code></td>
+        <td>*</td>
+        <td class="text-end">
+            <span class="text-muted" title="${defaultPolicyTitle}">Default Instance Policy</span>
+        </td>
+    `;
+    tbody.appendChild(trDefault);
+
     // Store current rules to handle reordering logic locally before saving
+    // This needs to be after appending trDefault if trDefault is not part of sortable rules
+    // If trDefault is meant to be non-sortable, its append position is fine here.
     window.currentRules = rules;
 }
 
@@ -737,5 +745,36 @@ async function saveInstanceFirewallPolicy() {
     if (!currentInstance) {
         showNotification("danger", "Errore: Istanza non selezionata.");
         return;
+    }
+
+    const policy = document.getElementById('instance-firewall-default-policy').value;
+
+    try {
+        const response = await fetch(`${API_AJAX_HANDLER}`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+                action: 'update_instance_firewall_policy', // Action for ajax_handler.php
+                instance_id: currentInstance.id,
+                default_policy: policy // Parameter name expected by backend
+            })
+        });
+        const result = await response.json();
+
+        if (result.success) { // Check result.success from ajax_handler.php
+            showNotification('success', 'Policy firewall predefinita aggiornata con successo.');
+            // Update currentInstance object in JS to reflect the new policy
+            currentInstance.firewall_default_policy = policy;
+            // Re-render rules to reflect the change in default policy (especially the "virtual" default rule)
+            if (currentGroupId) { // Only reload if a group is currently selected
+                loadRules(currentGroupId);
+            }
+        } else {
+            showNotification('danger', 'Errore salvataggio policy: ' + (result.body.detail || 'Sconosciuto'));
+        }
+    } catch (e) {
+        showNotification('danger', 'Errore di connessione: ' + e.message);
     }
 }
