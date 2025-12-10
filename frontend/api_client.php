@@ -31,6 +31,8 @@ function api_request($endpoint, $method = 'GET', $data = [], $raw_response = fal
     $response = curl_exec($ch);
     $http_code = curl_getinfo($ch, CURLINFO_HTTP_CODE);
     $header_size = curl_getinfo($ch, CURLINFO_HEADER_SIZE);
+    $http_code = curl_getinfo($ch, CURLINFO_HTTP_CODE); // Calculate is_success here
+    $is_success = ($http_code >= 200 && $http_code < 300);
 
     if (curl_errno($ch)) {
         // Errore cURL, es. backend non raggiungibile
@@ -48,14 +50,19 @@ function api_request($endpoint, $method = 'GET', $data = [], $raw_response = fal
     if ($raw_response) {
         $body = $body_str;
     } else {
-        $body = json_decode($body_str, true);
-        // Se il json_decode fallisce, potrebbe essere un file o testo semplice
+        $decoded_body = json_decode($body_str, true);
         if (json_last_error() !== JSON_ERROR_NONE) {
-            $body = $body_str;
+            // JSON decoding failed. If it's an error response, treat raw body as detail.
+            if (!$is_success) {
+                $body = ['detail' => "Errore API (" . $http_code . "): " . substr($body_str, 0, 200)];
+            } else {
+                // If it's a successful response but not JSON, keep as raw string.
+                $body = $body_str;
+            }
+        } else {
+            $body = $decoded_body;
         }
     }
-
-    $is_success = ($http_code >= 200 && $http_code < 300);
 
     return [
         'success' => $is_success,

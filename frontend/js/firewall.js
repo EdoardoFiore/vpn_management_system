@@ -324,6 +324,18 @@ async function loadRules(groupId) {
                 animation: 150,
                 ghostClass: 'sortable-ghost',
                 handle: '.ti-grip-vertical',
+                filter: '.non-draggable-rule', // Add this line
+                onMove: function (evt) {
+                    // Prevent any item from being moved if the related element (the one it's trying to move over/next to) is the non-draggable rule
+                    if (evt.related.classList.contains('non-draggable-rule')) {
+                        return false;
+                    }
+                    // Also prevent the non-draggable rule itself from being moved if it somehow gets initiated
+                    if (evt.dragged.classList.contains('non-draggable-rule')) {
+                        return false;
+                    }
+                    return true; // Allow move otherwise
+                },
                 onEnd: function(evt) {
                     // Get the moved item
                     const movedItem = window.currentRules.splice(evt.oldIndex, 1)[0];
@@ -385,7 +397,7 @@ function renderRules(rules) {
 
     // Always add a virtual rule for the instance's default firewall policy at the end
     const trDefault = document.createElement('tr');
-    trDefault.className = 'table-secondary'; // Style to distinguish it
+    trDefault.className = 'table-secondary non-draggable-rule'; // Style to distinguish it and make non-draggable
     
     let defaultPolicyDisplay = 'N/A';
     let defaultPolicyBadgeClass = 'bg-secondary';
@@ -624,7 +636,7 @@ async function updateRule() {
     const proto = document.getElementById('edit-rule-proto').value;
     const destInput = document.getElementById('edit-rule-dest');
     const portInput = document.getElementById('edit-rule-port');
-    const descInput = document.getElementById('edit-rule-desc');
+    const descInput = document.getElementById('rule-desc');
 
     // --- VALIDATION ---
     let isValid = true;
