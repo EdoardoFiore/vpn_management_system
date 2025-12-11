@@ -186,14 +186,67 @@ class MachineFirewallManager:
             rule.order = i
             
     def apply_all_rules(self) -> (bool, Optional[str]):
-        """Applies all currently managed machine firewall rules using iptables_manager."""
-        self.rules.sort(key=lambda r: r.order) # Ensure rules are applied in order
-        success, error = apply_machine_firewall_rules(self.rules)
-        if not success:
-            logger.error(f"Failed to apply machine firewall rules: {error}")
-        else:
-            logger.info("Machine firewall rules successfully applied to system.")
-        return success, error
+        """Applies all currently managed machine firewall rules using dedicated FW_* chains."""
+        success = True
+        error_message = None
+        
+        # 1. Define Chains
+        # Use constants from iptables_manager
+        fw_chains = {
+            "INPUT": iptables_manager.FW_INPUT_CHAIN,
+            "OUTPUT": iptables_manager.FW_OUTPUT_CHAIN,
+            "FORWARD": iptables_manager.FW_FORWARD_CHAIN
+        }
+        
+        # 2. Create/Flush Chains
+        for chain in fw_chains.values():
+            iptables_manager._create_or_flush_chain(chain, "filter")
+            
+        # 3. Ensure Jumps (Position 2, after VPN chains)
+        # We assume VPN jumps are at Position 1.
+        iptables_manager._ensure_jump_rule("INPUT", fw_chains["INPUT"], "filter", 2)
+        iptables_manager._ensure_jump_rule("OUTPUT", fw_chains["OUTPUT"], "filter", 2)
+        iptables_manager._ensure_jump_rule("FORWARD", fw_chains["FORWARD"], "filter", 2)
+
+        # 4. Apply Rules
+        # Optimization: We now use `-A` (Append) instead of `-I`.
+        # This is more efficient (no shifting rules) and cleaner.
+        # Since we use append, we iterate rules in their NORMAL stored order (Ascending).
+        
+        self.rules.sort(key=lambda r: r.order) # Ensure rules are sorted by order 0..N
+        
+        for rule in self.rules:
+            # We need to map the rule.chain (INPUT/OUTPUT/FORWARD) to FW_...
+            # We create a copy of the rule to avoid modifying the stored object
+            import copy
+            rule_copy = copy.deepcopy(rule)
+            
+            if rule_copy.chain in fw_chains:
+                rule_copy.chain = fw_chains[rule_copy.chain]
+                
+                # Use iptables_manager to add the rule
+                # NOTE: add_machine_firewall_rule defaults to -I. We need to override or use generic helper.
+                # Let's check iptables_manager.
+                # It has `add_machine_firewall_rule` which hardcodes `operation="-I"`.
+                # We should use `_build_iptables_args_from_rule` + `_run_iptables` directly OR update the helper.
+                # Updating `add_machine_firewall_rule` signature might break other callers?
+                # No, only used here essentially.
+                # Let's call the lower-level helpers to be explicit about "-A".
+                
+                args = iptables_manager._build_iptables_args_from_rule(rule_copy, operation="-A")
+                rule_add_success, rule_add_error = iptables_manager._run_iptables(rule_copy.table, args)
+                
+                if not rule_add_success:
+                    logger.error(f"Failed to apply rule {rule.id}: {rule_add_error}")
+                    success = False
+                    error_message = rule_add_error
+                    break # Stop on first failure
+            else:
+                logger.warning(f"Rule {rule.id} has unknown chain '{rule.chain}', skipping.")
+        
+        if success:
+            logger.info("Machine firewall rules successfully applied to system (FW_* chains).")
+        return success, error_message
 
 # Initialize the manager
 machine_firewall_manager = MachineFirewallManager()

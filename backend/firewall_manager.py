@@ -315,25 +315,28 @@ def apply_firewall_rules():
 
     # 3. Reset all managed chains
     logger.info("Flushing and deleting existing managed chains...")
-    for chain in all_chains:
-        _run_iptables(["iptables", "-F", chain], suppress_errors=True)
-    for chain in all_chains:
-        _run_iptables(["iptables", "-X", chain], suppress_errors=True)
+    # We rely on iptables_manager for VPN_* chains, but here we manage VI_* and VIG_* and VPN_MAIN_FWD
+    # Note: VPN_MAIN_FWD_CHAIN is defined in iptables_manager
+    main_chain = iptables_manager.VPN_MAIN_FWD_CHAIN
+    
+    # Flush Main Chain first
+    iptables_manager._create_or_flush_chain(main_chain)
+    
+    # Flush Instance and Group Chains
+    for chain in instance_chains + group_chains:
+        iptables_manager._create_or_flush_chain(chain)
 
-    # 4. Re-create all chains
-    logger.info("Creating new chains...")
-    for chain in all_chains:
-        _run_iptables(["iptables", "-N", chain], suppress_errors=True)
+    # 4. (Re-creation handled by _create_or_flush_chain above)
         
     # 5. Ensure main jump from FORWARD chain exists and is at the top
-    # Check if rule exists
-    res = _run_iptables(["iptables", "-C", "FORWARD", "-j", main_chain], suppress_errors=True)
-    if res and res.returncode != 0:
-        _run_iptables(["iptables", "-I", "FORWARD", "1", "-j", main_chain])
-        logger.info(f"Inserted jump from FORWARD to '{main_chain}'.")
+    # Use iptables_manager helper
+    iptables_manager._ensure_jump_rule("FORWARD", main_chain, "filter", 1)
 
     # 6. Populate chains
     logger.info("Populating iptables chains...")
+    
+    # Load OpenVPN configs to access TUN interfaces
+    openvpn_configs = iptables_manager._load_openvpn_rules_config()
     
     # Helper to get client IP (same as before, but defined locally)
     def get_client_ip(member_id, instances_data):
@@ -384,8 +387,65 @@ def apply_firewall_rules():
         instance_chain_name = f"VI_{instance.id}"
         
         # Add jumps from MAIN to INSTANCE chain
+        # Note: We filter by source subnet to direct traffic to the correct instance chain
         _run_iptables(["iptables", "-A", main_chain, "-s", instance.subnet, "-j", instance_chain_name])
         logger.info(f"[JUMP] Chain {main_chain}: -s {instance.subnet} -j {instance_chain_name}")
+
+        # --- General Instance Forwarding Rules (Moved from iptables_manager.add_openvpn_rules) ---
+        # Find config for this instance to get interface
+        # We need to match instance ID. The `instance` object has `id`, and config has `instance_id`.
+        # However, `instances` comes from `instance_manager` which uses IDs like "server_fiore".
+        # `openvpn_configs` are keyed by `instance_id` which we set to `inst_{port}` in iptables_manager... 
+        # WAIT. I set `instance_id = f"inst_{port}"` in `add_openvpn_rules`. 
+        # But `instance_manager.current` uses IDs based on names.
+        # This is a Problem: IDs mismatch.
+        # `instance_manager.create_instance` uses `instance_id = name.lower().replace(" ", "_")`
+        # and calls `add_openvpn_rules(port, ...)` without passing ID.
+        # `iptables_manager.add_openvpn_rules` generates `inst_{port}`.
+        # So we have a mismatch.
+        # FIX: I should lookup the config by PORT (which is unique) if ID doesn't match.
+        
+        inst_config = None
+        # Try direct lookup (unlikely to match with current code)
+        if instance.id in openvpn_configs:
+            inst_config = openvpn_configs[instance.id]
+        else:
+            # Lookup by port
+            inst_config = next((cfg for cfg in openvpn_configs.values() if cfg.port == instance.port), None)
+            
+        if inst_config:
+            tun_if = inst_config.tun_interface
+            out_if = inst_config.outgoing_interface
+            
+            # Allow forwarding from TUN to WAN (ESTABLISHED)
+            _run_iptables(["iptables", "-A", instance_chain_name, "-i", tun_if, "-o", out_if, "-m", "state", "--state", "RELATED,ESTABLISHED", "-j", "ACCEPT"])
+            # Allow forwarding from WAN to TUN (ESTABLISHED)
+            _run_iptables(["iptables", "-A", instance_chain_name, "-i", out_if, "-o", tun_if, "-m", "state", "--state", "RELATED,ESTABLISHED", "-j", "ACCEPT"])
+            # Allow forwarding from TUN to WAN (NEW - if policy allows, but usually we filter by group)
+            # Actually, general `tun -> eth0` access is traditionally allowed unless restricted.
+            # In the old code: `iptables -I FORWARD -i tun_interface -o outgoing_interface ... -j ACCEPT` wasn't explicitly there for NEW packets?
+            # Wait, `add_openvpn_rules` had:
+            # `iptables -I FORWARD -i tun_interface -j ACCEPT` (Line 276 in old iptables_manager) -> This allows EVERYTHING from TUN.
+            # So we should replicate this broad allow, BUT now we want to filter it by groups ideally?
+            # The user says: "gestire regole di firewall dedicate a gruppi... le regole in input non sono ordinate".
+            # If we simply allow everything from TUN, group rules might be bypassed if we are not careful?
+            # No, group rules are in `VIG_*`. `VI_*` jumps to `VIG_*`.
+            # If we put ` -i tun_interface -j ACCEPT` at the end of `VI_*`, it acts as a default allow.
+            # Rules:
+            # 1. State RELATED,ESTABLISHED -> ACCEPT (added above)
+            # 2. Jumps to Groups (specific source IPs)
+            # 3. Default Policy (Accept or Drop).
+            
+            # So we DON'T add a blanket "-i tun -j ACCEPT" here yet. 
+            # We add it at the very end only if policy is ACCEPT or if we want to emulate old behavior.
+            # Old behavior: `_run_iptables("filter", ["-I", "FORWARD", "-i", tun_interface, "-j", "ACCEPT"])`
+            # This was very permissive.
+            # We should probably respect `instance.firewall_default_policy`.
+            pass
+        else:
+            logger.warning(f"No OpenVPN config found for instance {instance.id} (port {instance.port}). Forwarding rules might be incomplete.")
+
+        # --- End General Rules ---
 
         # Find groups belonging to this instance
         instance_groups = [g for g in groups if g.instance_id == instance.id]
@@ -403,7 +463,18 @@ def apply_firewall_rules():
         default_policy = instance.firewall_default_policy.upper()
         if default_policy not in ["ACCEPT", "DROP", "REJECT"]:
             default_policy = "ACCEPT" # Safe default
-        _run_iptables(["iptables", "-A", instance_chain_name, "-j", default_policy])
+            
+        # If policy is ACCEPT, we need an explicit rule because the chain will return to FORWARD/VPN_MAIN_FWD and potentially fall through.
+        # But wait, `VPN_MAIN_FWD` jumps to `VI_{inst}`. If `VI_{inst}` returns (no match), it goes back to `VPN_MAIN_FWD`, then `FORWARD`.
+        # Taking "Old behavior" into account: `FORWARD -i tun0 -j ACCEPT`.
+        # If we want to strictly enforce "Default Policy", we should add it here.
+        
+        if default_policy == "ACCEPT":
+             _run_iptables(["iptables", "-A", instance_chain_name, "-j", "ACCEPT"])
+        else:
+             # DROP/REJECT
+             _run_iptables(["iptables", "-A", instance_chain_name, "-j", default_policy])
+
         logger.info(f"  [POLICY] Chain {instance_chain_name}: Default policy set to {default_policy}")
 
     logger.info("--- Firewall Rules Application Finished ---")

@@ -11,7 +11,12 @@ import vpn_manager
 import instance_manager
 import network_utils
 import firewall_manager as instance_firewall_manager # Renamed for clarity on instance-specific firewall
-from machine_firewall_manager import machine_firewall_manager # Will be created later
+import vpn_manager
+import instance_manager
+import network_utils
+import firewall_manager as instance_firewall_manager
+import iptables_manager # Added to initialize rules on startup
+from machine_firewall_manager import machine_firewall_manager
 
 # --- Modelli Pydantic ---
 class ClientRequest(BaseModel):
@@ -107,6 +112,22 @@ app = FastAPI(
     description="API per gestire istanze multiple di OpenVPN.",
     version="2.0.0",
 )
+
+@app.on_event("startup")
+async def startup_event():
+    """
+    Initialize system components on startup.
+    - Setup IP tables chains and rules.
+    """
+    # Verify/Execute OpenVPN rules application
+    try:
+        iptables_manager.apply_all_openvpn_rules()
+        print("Startup: OpenVPN firewall rules applied.")
+    except Exception as e:
+        print(f"Startup Error: Failed to apply OpenVPN rules: {e}")
+        
+    # Machine firewall rules are applied on import of machine_firewall_manager, 
+    # but we could force re-apply here if needed.
 
 # --- Middleware CORS ---
 origins = ["*"]
