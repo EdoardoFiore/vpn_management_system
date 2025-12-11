@@ -29,39 +29,125 @@ require_once 'includes/header.php';
     
     <!-- Machine Firewall Tab -->
     <div class="tab-pane active show" id="tab-machine-firewall">
-        <div class="card">
+        
+        <!-- Toolbar -->
+        <div class="mb-3 d-flex justify-content-end">
+             <button class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#modal-add-machine-rule">
+                <i class="ti ti-plus"></i> Nuova Regola
+            </button>
+        </div>
+
+        <!-- INPUT Rules -->
+        <div class="card mb-3">
             <div class="card-header">
-                <h3 class="card-title">Regole Firewall Globali</h3>
-                <div class="card-actions">
-                    <button class="btn btn-sm btn-primary" data-bs-toggle="modal" data-bs-target="#modal-add-machine-rule">
-                        <i class="ti ti-plus"></i> Nuova Regola
-                    </button>
-                </div>
+                <h3 class="card-title">Regole INPUT (Ingresso)</h3>
             </div>
             <div class="card-table table-responsive">
-                <table class="table table-vcenter">
+                <table class="table table-vcenter table-hover">
                     <thead>
                         <tr>
-                            <th class="w-1">Ordin.</th>
+                            <th class="w-1"></th>
                             <th>Azione</th>
+                            <th>Proto</th>
+                            <th>Sorgente</th>
+                            <th>Destinazione</th>
+                            <th>Porta</th>
+                            <th>In-If</th>
+                            <th>Commento</th>
+                            <th class="w-1"></th>
+                        </tr>
+                    </thead>
+                    <tbody id="machine-firewall-rules-input-body" data-chain-group="INPUT">
+                         <tr><td colspan="9" class="text-center text-muted">Caricamento...</td></tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+        <!-- OUTPUT Rules -->
+        <div class="card mb-3">
+            <div class="card-header">
+                <h3 class="card-title">Regole OUTPUT (Uscita)</h3>
+            </div>
+            <div class="card-table table-responsive">
+                <table class="table table-vcenter table-hover">
+                    <thead>
+                        <tr>
+                            <th class="w-1"></th>
+                            <th>Azione</th>
+                            <th>Proto</th>
+                            <th>Sorgente</th>
+                            <th>Destinazione</th>
+                            <th>Porta</th>
+                            <th>Out-If</th>
+                            <th>Commento</th>
+                            <th class="w-1"></th>
+                        </tr>
+                    </thead>
+                    <tbody id="machine-firewall-rules-output-body" data-chain-group="OUTPUT">
+                         <tr><td colspan="9" class="text-center text-muted">Caricamento...</td></tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+        <!-- FORWARD Rules -->
+        <div class="card mb-3">
+            <div class="card-header">
+                <h3 class="card-title">Regole FORWARD (Inoltro)</h3>
+            </div>
+            <div class="card-table table-responsive">
+                <table class="table table-vcenter table-hover">
+                    <thead>
+                        <tr>
+                            <th class="w-1"></th>
+                            <th>Azione</th>
+                            <th>Proto</th>
+                            <th>Sorgente</th>
+                            <th>Destinazione</th>
+                            <th>Porta</th>
+                            <th>In-If</th>
+                            <th>Out-If</th>
+                            <th>Commento</th>
+                            <th class="w-1"></th>
+                        </tr>
+                    </thead>
+                    <tbody id="machine-firewall-rules-forward-body" data-chain-group="FORWARD">
+                         <tr><td colspan="10" class="text-center text-muted">Caricamento...</td></tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+        <!-- OTHER Rules (NAT, Mangle, etc) -->
+        <div class="card mb-3">
+             <div class="card-header">
+                <h3 class="card-title">Altre Regole (NAT/Mangle/Raw)</h3>
+            </div>
+            <div class="card-table table-responsive">
+                <table class="table table-vcenter table-hover">
+                    <thead>
+                        <tr>
+                            <th class="w-1"></th>
                             <th>Tabella</th>
                             <th>Chain</th>
+                            <th>Azione</th>
                             <th>Proto</th>
-                            <th>Source</th>
+                            <th>Sorgente</th>
                             <th>Dest.</th>
                             <th>Porta</th>
-                                                                                    <th>In-If</th>
-                                                                                    <th>Out-If</th>
-                                                                                    <th>Commento</th>
-                                                                                    <th class="w-1"></th>
-                                                                                </tr>
-                                                                            </thead>
-                                                                            <tbody id="machine-firewall-rules-table-body">
-                                                                                <tr><td colspan="12" class="text-center text-muted">Caricamento regole...</td></tr>                                                </tbody>
-                                            </table>
-                                        </div>
-                                    </div>
-                                </div>
+                            <th>Commento</th>
+                            <th class="w-1"></th>
+                        </tr>
+                    </thead>
+                    <tbody id="machine-firewall-rules-other-body" data-chain-group="OTHER">
+                         <tr><td colspan="10" class="text-center text-muted">Caricamento...</td></tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+    </div>
                             
                                 <!-- Network Interfaces Tab -->
                                 <div class="tab-pane" id="tab-network-interfaces">

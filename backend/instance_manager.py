@@ -271,19 +271,26 @@ def create_instance(name: str, port: int, subnet: str, protocol: str = "udp",
     # Apply iptables for VPN subnet on default WAN interface
     iptables_manager.add_openvpn_rules(port, protocol, tun_interface, subnet)
     
-    # Apply iptables for custom routes to LAN interfaces
-    for route in new_instance.routes:
-        route_network = route.get('network')
-        route_interface = route.get('interface')
-        if route_network and route_interface:
-            iptables_manager.add_forwarding_rule(subnet, route_network)
+    # Remove legacy direct forwarding rule insertion
+    # iptables_manager.add_forwarding_rule(subnet, route_network)
+    # This is now handled by firewall_manager.apply_firewall_rules() iterating instance.routes
     
     # Persist iptables rules
-    _save_iptables_rules()
+    # We should trigger firewall_manager to apply the new routes immediately
+    # Since we are adding it to instances list below, we might need to save first or inject.
+    # The firewall_manager reads from `_load_instances` typically or `instance_manager.get_all_instances`.
+    # Let's save instance first then apply.
+    pass
 
     # Save
     instances.append(new_instance)
     _save_instances(instances)
+    
+    # Trigger Firewall Update (Includes Custom Routes in VI chain)
+    try:
+        instance_firewall_manager.apply_firewall_rules()
+    except Exception as e:
+        logger.error(f"Failed to apply firewall rules after instance creation: {e}")
 
     return new_instance
 
@@ -302,10 +309,10 @@ def delete_instance(instance_id: str):
     iptables_manager.remove_openvpn_rules(inst.port, inst.protocol, inst.tun_interface, inst.subnet)
     
     # Remove custom route forwarding rules  
-    for route in inst.routes:
-        route_network = route.get('network')
-        if route_network:
-            iptables_manager.remove_forwarding_rule(inst.subnet, route_network)
+    # Legacy cleanup - if we used the old method they might be there.
+    # But clean_legacy_rules should handle them or fw flush.
+    # For now, we can comment this out as firewall refresh will clear VI chains.
+    pass
     
     # Persist iptables rules
     _save_iptables_rules()
@@ -380,17 +387,13 @@ def update_instance_routes(instance_id: str, tunnel_mode: str, routes: List[Dict
     
     # Update iptables rules for routes
     # Remove old route forwarding rules
-    for route in old_routes:
-        route_network = route.get('network')
-        if route_network:
-            iptables_manager.remove_forwarding_rule(instance.subnet, route_network)
+    # Legacy code removed: iptables_manager.remove_forwarding_rule
+    pass
     
-    # Add new route forwarding rules
-    for route in routes:
-        route_network = route.get('network')
-        route_interface = route.get('interface')
-        if route_network and route_interface:
-            iptables_manager.add_forwarding_rule(instance.subnet, route_network)
+    # Adding new route forwarding rules
+    # Legacy code removed: iptables_manager.add_forwarding_rule
+    # Current Handling: Handled in firewall_manager.apply_firewall_rules() which reads instance.routes
+    pass
     
     # Persist iptables
     _save_iptables_rules()
@@ -409,6 +412,13 @@ def update_instance_routes(instance_id: str, tunnel_mode: str, routes: List[Dict
     _save_instances(instances)
     
     return instance
+    
+    # Trigger Firewall Update (Includes Custom Routes in VI chain)
+    # We do this AFTER saving instance above in `_save_instances(instances)`
+    try:
+        instance_firewall_manager.apply_firewall_rules()
+    except Exception as e:
+        logger.error(f"Failed to apply firewall rules after route update: {e}")
 
 def _generate_openvpn_config(instance: Instance):
     """

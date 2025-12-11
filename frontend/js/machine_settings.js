@@ -37,7 +37,7 @@ document.addEventListener('DOMContentLoaded', () => {
         });
 
         const form = document.getElementById('addMachineRuleForm');
-        
+
         const updateIptablesPreviewAddModal = () => {
             const previewCode = document.getElementById('iptables-preview-add');
             if (!form || !previewCode) return;
@@ -64,7 +64,7 @@ document.addEventListener('DOMContentLoaded', () => {
             if (outInterface) command.push('-o', outInterface);
             if (source) command.push('-s', source);
             if (destination && !['SNAT', 'DNAT'].includes(action)) command.push('-d', destination);
-            
+
             if (protocol) {
                 command.push('-p', protocol);
                 if (port && (protocol === 'tcp' || protocol === 'udp')) {
@@ -75,7 +75,7 @@ document.addEventListener('DOMContentLoaded', () => {
             if (state) {
                 command.push('-m', 'state', '--state', state);
             }
-            
+
             if (comment) {
                 command.push('-m', 'comment', '--comment', `"${comment}"`);
             }
@@ -96,7 +96,7 @@ document.addEventListener('DOMContentLoaded', () => {
             const tableSelect = form.elements['table'];
             const chainSelect = form.elements['chain'];
             const selectedTable = tableSelect.value;
-            
+
             const currentChain = chainSelect.value;
             chainSelect.innerHTML = '';
 
@@ -112,7 +112,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 }
             });
 
-            if(isCurrentChainValid) {
+            if (isCurrentChainValid) {
                 chainSelect.value = currentChain;
             }
 
@@ -141,10 +141,23 @@ document.addEventListener('DOMContentLoaded', () => {
 
 // --- Machine Firewall Rules ---
 
+// --- Machine Firewall Rules ---
+
+let sortableInstances = [];
+
 async function loadMachineFirewallRules() {
-    const tbody = document.getElementById('machine-firewall-rules-table-body');
-    tbody.innerHTML = '<tr><td colspan="12" class="text-center text-muted">Caricamento regole...</td></tr>';
-    
+    const bodies = [
+        'machine-firewall-rules-input-body',
+        'machine-firewall-rules-output-body',
+        'machine-firewall-rules-forward-body',
+        'machine-firewall-rules-other-body'
+    ];
+
+    bodies.forEach(id => {
+        const el = document.getElementById(id);
+        if (el) el.innerHTML = '<tr><td colspan="10" class="text-center text-muted">Caricamento regole...</td></tr>';
+    });
+
     try {
         const response = await fetch(`${API_AJAX_HANDLER}?action=get_machine_firewall_rules`);
         const result = await response.json();
@@ -152,58 +165,106 @@ async function loadMachineFirewallRules() {
         if (result.success) {
             machineFirewallRules = result.body;
             renderMachineFirewallRules();
-            
-            // Initialize SortableJS after rendering the table
-            if (sortableInstance) {
-                sortableInstance.destroy();
-            }
-            sortableInstance = new Sortable(tbody, {
-                animation: 150,
-                ghostClass: 'sortable-ghost',
-                handle: '.ti-grip-vertical',
-                onEnd: function(evt) {
-                    // Get the moved item
-                    const movedItem = machineFirewallRules.splice(evt.oldIndex, 1)[0];
-                    // Insert it at the new index
-                    machineFirewallRules.splice(evt.newIndex, 0, movedItem);
 
-                    // Re-assign order based on the new array index
-                    machineFirewallRules.forEach((rule, index) => {
-                        rule.order = index;
+            // Initialize SortableJS for all tables
+            // Destroy old instances
+            sortableInstances.forEach(inst => inst.destroy());
+            sortableInstances = [];
+
+            bodies.forEach(bodyId => {
+                const el = document.getElementById(bodyId);
+                if (el) {
+                    const sortable = new Sortable(el, {
+                        animation: 150,
+                        ghostClass: 'sortable-ghost',
+                        handle: '.ti-grip-vertical',
+                        group: 'machine-firewall', // Allow dragging between tables (optional, but maybe useful?)
+                        // actually, dragging between chains CHANGES the rule definition. 
+                        // It's safer to DISABLE dragging between tables for now to avoid accidental Chain changes.
+                        // group: null, 
+                        onEnd: function (evt) {
+                            // User reordered rows. We need to recalculate the global order.
+                            recalculateAndSaveOrder();
+                        }
                     });
-                    
-                    // The UI is already updated by SortableJS, but we can re-render to be safe
-                    renderMachineFirewallRules();
-                    
-                    // Save the new order to the backend
-                    applyMachineFirewallRules();
+                    sortableInstances.push(sortable);
                 }
             });
 
         } else {
             showNotification('danger', 'Errore caricamento regole firewall macchina: ' + (result.body.detail || 'Sconosciuto'));
-            tbody.innerHTML = '<tr><td colspan="12" class="text-center text-danger">Errore caricamento regole.</td></tr>';
+            bodies.forEach(id => {
+                const el = document.getElementById(id);
+                if (el) el.innerHTML = '<tr><td colspan="10" class="text-center text-danger">Errore caricamento.</td></tr>';
+            });
         }
     } catch (e) {
         showNotification('danger', 'Errore di connessione caricando regole firewall macchina: ' + e.message);
-        tbody.innerHTML = '<tr><td colspan="12" class="text-center text-danger">Errore di connessione.</td></tr>';
+        bodies.forEach(id => {
+            const el = document.getElementById(id);
+            if (el) el.innerHTML = '<tr><td colspan="10" class="text-center text-danger">Errore.</td></tr>';
+        });
     }
 }
 
+function recalculateAndSaveOrder() {
+    // We scrape the DOM to get the new order of IDs
+    // We process tables in a specific order: Input, Output, Forward, Other.
+    // This effectively groups rules by chain in the saved file/global order.
+
+    const bodies = [
+        'machine-firewall-rules-input-body',
+        'machine-firewall-rules-output-body',
+        'machine-firewall-rules-forward-body',
+        'machine-firewall-rules-other-body'
+    ];
+
+    let newOrder = 0;
+    const newGlobalList = []; // To update local state
+
+    bodies.forEach(bodyId => {
+        const tbody = document.getElementById(bodyId);
+        if (!tbody) return;
+
+        // Iterate over rows
+        const rows = tbody.querySelectorAll('tr[data-id]');
+        rows.forEach(row => {
+            const id = row.getAttribute('data-id');
+            const rule = machineFirewallRules.find(r => r.id === id);
+            if (rule) {
+                rule.order = newOrder++;
+                newGlobalList.push(rule);
+            }
+        });
+    });
+
+    // Sort logic handled, now update backend
+    machineFirewallRules = newGlobalList; // Update local state sorted
+    applyMachineFirewallRules();
+}
+
 function renderMachineFirewallRules() {
-    const tbody = document.getElementById('machine-firewall-rules-table-body');
-    tbody.innerHTML = '';
+    const bodies = {
+        input: document.getElementById('machine-firewall-rules-input-body'),
+        output: document.getElementById('machine-firewall-rules-output-body'),
+        forward: document.getElementById('machine-firewall-rules-forward-body'),
+        other: document.getElementById('machine-firewall-rules-other-body')
+    };
+
+    // Clear all
+    Object.values(bodies).forEach(el => { if (el) el.innerHTML = ''; });
 
     if (machineFirewallRules.length === 0) {
-        tbody.innerHTML = '<tr><td colspan="12" class="text-center text-muted">Nessuna regola firewall definita.</td></tr>';
+        Object.values(bodies).forEach(el => { if (el) el.innerHTML = '<tr><td colspan="10" class="text-center text-muted">Nessuna regola definita.</td></tr>'; });
         return;
     }
 
+    // Sort by order first
     machineFirewallRules.sort((a, b) => a.order - b.order);
 
     machineFirewallRules.forEach((rule, index) => {
         const tr = document.createElement('tr');
-        tr.setAttribute('data-id', rule.id); // Add data-id for SortableJS
+        tr.setAttribute('data-id', rule.id);
 
         let badgeClass = 'bg-secondary';
         if (rule.action === 'ACCEPT') badgeClass = 'bg-success';
@@ -211,20 +272,47 @@ function renderMachineFirewallRules() {
         if (rule.action === 'REJECT') badgeClass = 'bg-warning';
         if (rule.action === 'MASQUERADE') badgeClass = 'bg-info';
 
-        tr.innerHTML = `
-            <td class="w-1" style="cursor: grab;">
-                <i class="ti ti-grip-vertical"></i>
-            </td>
-            <td><span class="badge ${badgeClass}">${rule.action}</span></td>
-            <td>${rule.table}</td>
-            <td>${rule.chain}</td>
-            <td>${rule.protocol ? rule.protocol.toUpperCase() : 'ANY'}</td>
-            <td><code>${rule.source || 'ANY'}</code></td>
-            <td><code>${rule.destination || 'ANY'}</code></td>
-            <td>${rule.port || '*'}</td>
-            <td>${rule.in_interface || '*'}</td>
-            <td>${rule.out_interface || '*'}</td>
-            <td>${rule.comment || ''}</td>
+        // Determine destination table
+        let targetBody = bodies.other;
+        if (rule.table === 'filter' || !rule.table) {
+            if (rule.chain === 'INPUT' || rule.chain === 'FW_INPUT') targetBody = bodies.input;
+            else if (rule.chain === 'OUTPUT' || rule.chain === 'FW_OUTPUT') targetBody = bodies.output;
+            else if (rule.chain === 'FORWARD' || rule.chain === 'FW_FORWARD') targetBody = bodies.forward;
+        }
+
+        // Columns differ slightly for Input/Output/Forward/Other? 
+        // We simplified the generic renderer in previous version, but now HTML tables have different headers.
+        // We need to render matching TD structure.
+
+        let innerHTML = `<td class="w-1" style="cursor: grab;"><i class="ti ti-grip-vertical"></i></td>`;
+        innerHTML += `<td><span class="badge ${badgeClass}">${rule.action}</span></td>`;
+
+        if (targetBody === bodies.other) {
+            innerHTML += `<td>${rule.table || 'filter'}</td>`;
+            innerHTML += `<td>${rule.chain}</td>`;
+            innerHTML += `<td>${rule.protocol ? rule.protocol.toUpperCase() : 'ANY'}</td>`;
+            innerHTML += `<td><code>${rule.source || 'ANY'}</code></td>`;
+            innerHTML += `<td><code>${rule.destination || 'ANY'}</code></td>`;
+            innerHTML += `<td>${rule.port || '*'}</td>`;
+            innerHTML += `<td>${rule.comment || ''}</td>`;
+        } else {
+            innerHTML += `<td>${rule.protocol ? rule.protocol.toUpperCase() : 'ANY'}</td>`;
+            innerHTML += `<td><code>${rule.source || 'ANY'}</code></td>`;
+            innerHTML += `<td><code>${rule.destination || 'ANY'}</code></td>`;
+            innerHTML += `<td>${rule.port || '*'}</td>`;
+
+            if (targetBody === bodies.input) {
+                innerHTML += `<td>${rule.in_interface || '*'}</td>`;
+            } else if (targetBody === bodies.output) {
+                innerHTML += `<td>${rule.out_interface || '*'}</td>`;
+            } else if (targetBody === bodies.forward) {
+                innerHTML += `<td>${rule.in_interface || '*'}</td>`;
+                innerHTML += `<td>${rule.out_interface || '*'}</td>`;
+            }
+            innerHTML += `<td>${rule.comment || ''}</td>`;
+        }
+
+        innerHTML += `
             <td class="text-end">
                 <button class="btn btn-sm btn-ghost-primary" onclick="openEditMachineRuleModal('${rule.id}')" title="Modifica">
                     <i class="ti ti-edit"></i>
@@ -234,7 +322,17 @@ function renderMachineFirewallRules() {
                 </button>
             </td>
         `;
-        tbody.appendChild(tr);
+
+        tr.innerHTML = innerHTML;
+        if (targetBody) targetBody.appendChild(tr);
+    });
+
+    // Check if any body is empty and add placeholder
+    Object.values(bodies).forEach(el => {
+        if (el && el.children.length === 0) {
+            const colSpan = (el === bodies.other || el === bodies.forward) ? 10 : 9;
+            el.innerHTML = `<tr><td colspan="${colSpan}" class="text-center text-muted">Nessuna regola in questa sezione.</td></tr>`;
+        }
     });
 }
 
@@ -356,7 +454,7 @@ async function applyMachineFirewallRules() {
 function toggleMachinePortInput(protocol, modalType) {
     const portContainer = document.getElementById(`machine-port-container-${modalType}`);
     if (!portContainer) return;
-    
+
     if (protocol === 'tcp' || protocol === 'udp') {
         portContainer.style.display = 'block';
     } else {
@@ -371,7 +469,7 @@ function toggleMachinePortInput(protocol, modalType) {
 async function loadNetworkInterfaces() {
     const tbody = document.getElementById('network-interfaces-table-body');
     tbody.innerHTML = '<tr><td colspan="7" class="text-center text-muted">Caricamento interfacce...</td></tr>';
-    
+
     try {
         const response = await fetch(`${API_AJAX_HANDLER}?action=get_machine_network_interfaces`);
         const result = await response.json();
@@ -400,7 +498,7 @@ function renderNetworkInterfaces() {
 
     networkInterfaces.forEach(iface => {
         const tr = document.createElement('tr');
-        
+
         let ipDisplay = 'N/A';
         let cidrDisplay = 'N/A';
         let netmaskDisplay = 'N/A';
@@ -414,7 +512,7 @@ function renderNetworkInterfaces() {
                 ipDisplay += ` (+${iface.configured_ips.length - 1})`;
             }
         }
-        
+
         tr.innerHTML = `
             <td>${iface.name}</td>
             <td>${iface.mac_address || 'N/A'}</td>
@@ -450,7 +548,7 @@ async function openEditNetworkInterfaceModal(interfaceName) {
 
         if (result.success) {
             const config = result.body;
-            
+
             let ipMethod = 'dhcp';
             if (config && config.dhcp4 === false && config.addresses && config.addresses.length > 0) {
                 ipMethod = 'static';
@@ -506,7 +604,7 @@ function addIpAddressField(ipCidr = '') {
 async function saveNetworkInterfaceConfig() {
     const interfaceName = document.getElementById('edit-interface-hidden-name').value;
     const ipMethod = document.getElementById('edit-interface-ip-method').value;
-    
+
     let netplanConfig = {};
 
     if (ipMethod === 'dhcp') {
@@ -517,8 +615,8 @@ async function saveNetworkInterfaceConfig() {
             const val = input.value.trim();
             if (val) {
                 if (!/^(\d{1,3}\.){3}\d{1,3}\/\d{1,2}$/.test(val)) {
-                     showNotification('danger', `Indirizzo IP non valido: ${val}`);
-                     return;
+                    showNotification('danger', `Indirizzo IP non valido: ${val}`);
+                    return;
                 }
                 ipAddresses.push(val);
             }
@@ -545,7 +643,7 @@ async function saveNetworkInterfaceConfig() {
     } else if (ipMethod === 'none') {
         netplanConfig = { dhcp4: false, addresses: [], routes: [], nameservers: {} };
     }
-    
+
     try {
         const response = await fetch(`${API_AJAX_HANDLER}?action=update_machine_network_interface_config&interface_name=${encodeURIComponent(interfaceName)}`, {
             method: 'POST',
@@ -667,7 +765,7 @@ document.addEventListener('DOMContentLoaded', () => {
             // Get the correct chain dropdown for the edit modal
             const chainSelect = form.elements['chain'];
             const selectedTable = form.elements['table'].value;
-            
+
             chainSelect.innerHTML = '';
             const options = chainOptionsMap[selectedTable] || [];
             options.forEach(optionValue => {
@@ -709,7 +807,7 @@ function updateIptablesPreviewEditModal() {
     if (outInterface) command.push('-o', outInterface);
     if (source) command.push('-s', source);
     if (destination && !['SNAT', 'DNAT'].includes(action)) command.push('-d', destination);
-    
+
     if (protocol) {
         command.push('-p', protocol);
         if (port && (protocol === 'tcp' || protocol === 'udp')) {
@@ -720,7 +818,7 @@ function updateIptablesPreviewEditModal() {
     if (state) {
         command.push('-m', 'state', '--state', state);
     }
-    
+
     if (comment) {
         command.push('-m', 'comment', '--comment', `"${comment}"`);
     }
@@ -835,7 +933,7 @@ document.addEventListener('DOMContentLoaded', () => {
             // Get the correct chain dropdown for the edit modal
             const chainSelect = form.elements['chain'];
             const selectedTable = form.elements['table'].value;
-            
+
             chainSelect.innerHTML = '';
             const options = chainOptionsMap[selectedTable] || [];
             options.forEach(optionValue => {
@@ -877,7 +975,7 @@ function updateIptablesPreviewEditModal() {
     if (outInterface) command.push('-o', outInterface);
     if (source) command.push('-s', source);
     if (destination && !['SNAT', 'DNAT'].includes(action)) command.push('-d', destination);
-    
+
     if (protocol) {
         command.push('-p', protocol);
         if (port && (protocol === 'tcp' || protocol === 'udp')) {
@@ -888,7 +986,7 @@ function updateIptablesPreviewEditModal() {
     if (state) {
         command.push('-m', 'state', '--state', state);
     }
-    
+
     if (comment) {
         command.push('-m', 'comment', '--comment', `"${comment}"`);
     }
@@ -909,7 +1007,7 @@ function updateIptablesPreviewEditModal() {
 function toggleMachinePortInput(protocol, modalType) {
     const portContainer = document.getElementById(`machine-port-container-${modalType}`);
     if (!portContainer) return;
-    
+
     if (protocol === 'tcp' || protocol === 'udp') {
         portContainer.style.display = 'block';
     } else {

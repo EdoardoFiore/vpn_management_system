@@ -6,6 +6,7 @@ from typing import List, Dict, Optional, Union
 
 # Assuming iptables_manager.py is in the same directory and contains MachineFirewallRule
 from iptables_manager import MachineFirewallRule, apply_machine_firewall_rules
+import iptables_manager # Added to fix NameError in apply_all_rules
 
 logger = logging.getLogger(__name__)
 

@@ -6,8 +6,10 @@ import logging
 from typing import List, Dict, Optional
 from ipaddress import ip_network, AddressValueError
 from pydantic import BaseModel, validator
+from pydantic import BaseModel, validator
 import ip_manager
 import instance_manager
+import iptables_manager # Added to fix NameError
 
 logger = logging.getLogger(__name__)
 
@@ -315,12 +317,7 @@ def apply_firewall_rules():
 
     # 3. Reset all managed chains
     logger.info("Flushing and deleting existing managed chains...")
-    # We rely on iptables_manager for VPN_* chains, but here we manage VI_* and VIG_* and VPN_MAIN_FWD
-    # Note: VPN_MAIN_FWD_CHAIN is defined in iptables_manager
-    main_chain = iptables_manager.VPN_MAIN_FWD_CHAIN
-    
-    # Flush Main Chain first
-    iptables_manager._create_or_flush_chain(main_chain)
+    # We rely on iptables_manager for VPN_* chains. VPN_MAIN_FWD is now flushed/created there centrally.
     
     # Flush Instance and Group Chains
     for chain in instance_chains + group_chains:
@@ -328,9 +325,9 @@ def apply_firewall_rules():
 
     # 4. (Re-creation handled by _create_or_flush_chain above)
         
-    # 5. Ensure main jump from FORWARD chain exists and is at the top
-    # Use iptables_manager helper
-    iptables_manager._ensure_jump_rule("FORWARD", main_chain, "filter", 1)
+    # 5. Ensure main jump from FORWARD chain exists
+    # This is now handled in iptables_manager.apply_all_openvpn_rules to ensure priority position (1).
+    # We can trust it exists.
 
     # 6. Populate chains
     logger.info("Populating iptables chains...")
@@ -438,10 +435,22 @@ def apply_firewall_rules():
             
             # So we DON'T add a blanket "-i tun -j ACCEPT" here yet. 
             # We add it at the very end only if policy is ACCEPT or if we want to emulate old behavior.
-            # Old behavior: `_run_iptables("filter", ["-I", "FORWARD", "-i", tun_interface, "-j", "ACCEPT"])`
-            # This was very permissive.
-            # We should probably respect `instance.firewall_default_policy`.
-            pass
+            
+            # --- Custom Routes (Split Tunnel / LAN Access) ---
+            # Added to support Split Tunnel custom routes cleanly within the instance chain
+            if instance.routes:
+                logger.info(f"Adding custom routes for instance {instance.id}")
+                for route in instance.routes:
+                     network = route.get('network')
+                     # Interface is optional, if not provided we rely on routing table/VPN handling, 
+                     # but for iptables forwarding we generally just need destination allow.
+                     if network:
+                         # Allow TUN -> Target Network
+                         # This places the rule inside VI_{inst}, respecting the hierarchy.
+                         cmd = ["iptables", "-A", instance_chain_name, "-s", instance.subnet, "-d", network, "-j", "ACCEPT"]
+                         _run_iptables(cmd)
+                         logger.info(f"  [ROUTE] {instance_chain_name}: -d {network} -j ACCEPT")
+
         else:
             logger.warning(f"No OpenVPN config found for instance {instance.id} (port {instance.port}). Forwarding rules might be incomplete.")
 

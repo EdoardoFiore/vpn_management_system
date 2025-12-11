@@ -92,7 +92,7 @@ class MachineFirewallRule:
     def from_dict(data: dict):
         return MachineFirewallRule(**data)
 
-def _run_iptables(table: str, args: List[str]):
+def _run_iptables(table: str, args: List[str], suppress_errors: bool = False):
     """Run an iptables command."""
     command = ["/usr/sbin/iptables"]
     if table != "filter": # Default table is filter, only add -t if different
@@ -106,9 +106,12 @@ def _run_iptables(table: str, args: List[str]):
         return True, None
     except subprocess.CalledProcessError as e:
         full_command_str = ' '.join(command)
-        error_msg = f"iptables error (exit code {e.returncode}) on command '{full_command_str}': {e.stderr.strip()}"
-        logger.error(error_msg)
-        return False, error_msg
+        if not suppress_errors:
+            error_msg = f"iptables error (exit code {e.returncode}) on command '{full_command_str}': {e.stderr.strip()}"
+            logger.error(error_msg)
+            return False, error_msg
+        else:
+            return False, e.stderr.strip()
 
 def _run_iptables_save():
     """Saves current iptables rules."""
@@ -386,6 +389,44 @@ def _apply_openvpn_instance_rules(config: OpenVPNCfgRule):
     _run_iptables("filter", ["-A", VPN_OUTPUT_CHAIN, "-j", output_chain])
     _run_iptables("nat", ["-A", VPN_NAT_POSTROUTING_CHAIN, "-j", nat_chain])
 
+def _clean_legacy_rules():
+    """
+    Removes known legacy/rogue rules created by OpenVPN installers or previous versions.
+    These rules clog the main chains and duplicate functionality now managed by VPN_* chains.
+    """
+    logger.info("Cleaning up legacy OpenVPN rules...")
+    # Common rules to look for and delete
+    # We use explicit matching to avoid deleting user custom rules if possible, 
+    # but based on the user's output, these are generic.
+    
+    # INPUT Legacy
+    # -i tun+ -j ACCEPT
+    # We try with generic "tun+" and specific "tun0" just in case.
+    _run_iptables("filter", ["-D", "INPUT", "-i", "tun+", "-j", "ACCEPT"], suppress_errors=True)
+    _run_iptables("filter", ["-D", "INPUT", "-i", "tun0", "-j", "ACCEPT"], suppress_errors=True)
+    
+    # UDP 1194 (Default OpenVPN port) - redundant if we have VPN_INPUT handling it
+    # We should delete it only if it's the raw rule.
+    _run_iptables("filter", ["-D", "INPUT", "-p", "udp", "--dport", "1194", "-j", "ACCEPT"], suppress_errors=True)
+    _run_iptables("filter", ["-D", "INPUT", "-p", "tcp", "--dport", "1194", "-j", "ACCEPT"], suppress_errors=True)
+    
+    # FORWARD Legacy
+    # -i tun0 -o eth0 -j ACCEPT (and variants)
+    _run_iptables("filter", ["-D", "FORWARD", "-i", "tun+", "-j", "ACCEPT"], suppress_errors=True)
+    _run_iptables("filter", ["-D", "FORWARD", "-i", "tun0", "-j", "ACCEPT"], suppress_errors=True)
+    
+    # Forwarding between tun and default interface (often eth0)
+    def_if = DEFAULT_INTERFACE
+    if def_if:
+        _run_iptables("filter", ["-D", "FORWARD", "-i", "tun+", "-o", def_if, "-j", "ACCEPT"], suppress_errors=True)
+        _run_iptables("filter", ["-D", "FORWARD", "-i", def_if, "-o", "tun+", "-j", "ACCEPT"], suppress_errors=True)
+        _run_iptables("filter", ["-D", "FORWARD", "-i", "tun0", "-o", def_if, "-j", "ACCEPT"], suppress_errors=True)
+        _run_iptables("filter", ["-D", "FORWARD", "-i", def_if, "-o", "tun0", "-j", "ACCEPT"], suppress_errors=True)
+        
+        # State related rules often found
+        _run_iptables("filter", ["-D", "FORWARD", "-i", "tun+", "-o", def_if, "-m", "state", "--state", "RELATED,ESTABLISHED", "-j", "ACCEPT"], suppress_errors=True)
+        _run_iptables("filter", ["-D", "FORWARD", "-i", def_if, "-o", "tun+", "-m", "state", "--state", "RELATED,ESTABLISHED", "-j", "ACCEPT"], suppress_errors=True)
+
 def apply_all_openvpn_rules():
     """
     Orchestrates the application of all OpenVPN-related iptables rules.
@@ -395,29 +436,29 @@ def apply_all_openvpn_rules():
     
     configs = _load_openvpn_rules_config()
     
+    # 0. Clean Legacy Rules first to ensure main chains are tidy
+    _clean_legacy_rules()
+    
     # 1. Reset Top-Level VPN Chains
     _create_or_flush_chain(VPN_INPUT_CHAIN, "filter")
     _create_or_flush_chain(VPN_OUTPUT_CHAIN, "filter")
     _create_or_flush_chain(VPN_NAT_POSTROUTING_CHAIN, "nat")
     
-    # Note: VPN_MAIN_FWD_CHAIN is managed by firewall_manager.py, 
-    # but we ensure the jump from FORWARD exists here.
-    # Actually, firewall_manager.py handles VPN_MAIN_FWD, but we should probably ensure 
-    # the jump from FORWARD -> VPN_MAIN_FWD is correct here too or let firewall_manager handle it.
-    # The plan says apply_all_openvpn_rules should call firewall_manager.apply_firewall_rules().
+    # Ensure VPN_MAIN_FWD exists HERE to guarantee it's available for the jump
+    _create_or_flush_chain(VPN_MAIN_FWD_CHAIN, "filter")
     
-    # 2. Ensure Jumps from Main Chains (INPUT, OUTPUT, POSTROUTING)
+    # 2. Ensure Jumps from Main Chains (INPUT, OUTPUT, POSTROUTING, FORWARD)
     # Use Position 1 to be at the top
     _ensure_jump_rule("INPUT", VPN_INPUT_CHAIN, "filter", 1)
     _ensure_jump_rule("OUTPUT", VPN_OUTPUT_CHAIN, "filter", 1)
     _ensure_jump_rule("POSTROUTING", VPN_NAT_POSTROUTING_CHAIN, "nat", 1)
+    _ensure_jump_rule("FORWARD", VPN_MAIN_FWD_CHAIN, "filter", 1) # Ensure this jump exists!
     
     # 3. Apply Rules for Each Instance
     for config in configs.values():
         _apply_openvpn_instance_rules(config)
         
-    # 4. Trigger Firewall Manager to update FORWARD chain rules (including VPN_MAIN_FWD)
-    # This ensures that VI_{inst} chains are updated with general forwarding rules
+    # 4. Trigger Firewall Manager to update FORWARD chain rules (populate VPN_MAIN_FWD)
     try:
         firewall_manager.apply_firewall_rules()
     except Exception as e:
