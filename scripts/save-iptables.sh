@@ -1,12 +1,15 @@
 #!/bin/bash
-# Script to persist iptables rules for OpenVPN instances
-# This script saves current iptables rules to a file
+# This script is intentionally left blank.
 
-RULES_FILE="/etc/iptables/openvpn-rules.v4"
+# In the new architecture, firewall rules are stored declaratively in JSON files
+# within the /opt/vpn-manager/backend/ directory.
+# The `restore-iptables.sh` script, executed on boot, reads these files
+# and applies the rules using a central Python script.
 
-mkdir -p /etc/iptables
+# This "save" script is called on shutdown by the persistence service. We do not
+# want to save the current (potentially modified) state of iptables, as that
+# would defeat the "single source of truth" principle of our JSON files.
+# Therefore, this script does nothing, ensuring that only the rules defined
+# in our application are applied on the next boot.
 
-# Save current rules
-iptables-save > "$RULES_FILE"
-
-echo "iptables rules saved to $RULES_FILE"
+exit 0

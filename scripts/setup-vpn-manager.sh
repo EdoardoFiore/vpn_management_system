@@ -105,17 +105,17 @@ log_info "Avvio dell'installazione del sistema di gestione VPN..."
 # --- Fase 1: Aggiornamento del sistema e installazione dipendenze ---
 log_info "Fase 1/5: Aggiornamento del sistema e installazione delle dipendenze..."
 
-apt-get update && apt-get upgrade -y
+#apt-get update && apt-get upgrade -y
 
-log_info "Aggiunta del repository PPA per PHP 8.1..."
-apt-get install -y software-properties-common apt-transport-https
-add-apt-repository ppa:ondrej/php -y
-apt-get update
+#log_info "Aggiunta del repository PPA per PHP 8.1..."
+#apt-get install -y software-properties-common apt-transport-https
+#add-apt-repository ppa:ondrej/php -y
+#apt-get update
 
-if ! apt-get install -y nginx python3-pip python3-venv php8.1-fpm php8.1-curl curl apache2-utils; then
-  log_error "Installazione delle dipendenze di base fallita."
-  exit 1
-fi
+#if ! apt-get install -y nginx python3-pip python3-venv php8.1-fpm php8.1-curl curl apache2-utils; then
+#  log_error "Installazione delle dipendenze di base fallita."
+#  exit 1
+#fi
 
 log_success "Dipendenze installate con successo."
 
