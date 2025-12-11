@@ -1,6 +1,6 @@
 [Unit]
 Description=VPN Management API Service
-After=network.target
+After=network.target iptables-openvpn.service
 
 [Service]
 User=root
