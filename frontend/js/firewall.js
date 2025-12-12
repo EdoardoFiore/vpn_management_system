@@ -77,7 +77,7 @@ function renderGroupsList() {
         item.innerHTML = `
             <div class="d-flex justify-content-between align-items-center">
                 <span>${group.name}</span>
-                <span class="badge bg-secondary rounded-pill">${group.members.length}</span>
+                <span class="badge bg-secondary rounded-pill">${(group.members || group.client_links || []).length}</span>
             </div>
             <small class="text-muted d-block text-truncate">${group.description}</small>
         `;
@@ -157,12 +157,13 @@ function renderMembers(group) {
     const tbody = document.getElementById('members-table-body');
     tbody.innerHTML = '';
 
-    if (group.members.length === 0) {
+    const members = group.members || group.client_links || [];
+    if (members.length === 0) {
         tbody.innerHTML = '<tr><td colspan="2" class="text-center text-muted">Nessun membro.</td></tr>';
         return;
     }
 
-    group.members.forEach(memberId => {
+    members.forEach(memberId => {
         // CLEANUP NAME: Remove instance prefix for display
         // We know memberId is "{instance}_{client}"
         let displayUser = memberId;
@@ -197,9 +198,10 @@ async function openAddMemberModal() {
         // 1. Get all members already in any group for this instance
         const existingMembers = new Set();
         allGroups.filter(g => g.instance_id === currentInstance.id)
-                 .forEach(g => {
-                     g.members.forEach(m => existingMembers.add(m));
-                 });
+            .forEach(g => {
+                const members = g.members || g.client_links || [];
+                members.forEach(m => existingMembers.add(m));
+            });
 
         // 2. Load available clients from the API
         const clientResp = await fetch(`${API_AJAX_HANDLER}?action=get_clients&instance_id=${currentInstance.id}`);
@@ -212,16 +214,18 @@ async function openAddMemberModal() {
 
         // 3. Populate dropdown, excluding existing members
         clients.forEach(c => {
-            const clientIdentifier = c.name; // The name from get_clients is the full identifier
-            
-            if (existingMembers.has(clientIdentifier)) {
+            // Group members are stored as "instance_clientname" in the API response (GroupRead)
+            // But get_clients returns just "clientname"
+            const fullIdentifier = `${currentInstance.name}_${c.name}`;
+
+            if (existingMembers.has(fullIdentifier)) {
                 return; // Skip this client, it's already in a group
             }
-            
-            const displayName = clientIdentifier.replace(`${currentInstance.name}_`, "");
+
+            const displayName = c.name;
 
             availableClientData.push({
-                id: clientIdentifier,
+                id: c.name,
                 client_name: displayName,
                 instance_name: currentInstance.name,
                 subnet: currentInstance.subnet,
@@ -229,12 +233,19 @@ async function openAddMemberModal() {
             });
 
             const opt = document.createElement('option');
-            opt.value = clientIdentifier;
+            opt.value = c.name; // Backend add_member expects the client identifier. Let's send what matches. 
+            // Wait, backend add_member checks prefix?
+            // "if real_client_name.startswith(prefix)..."
+            // So if we send "edoardo.fiore", it works.
+            // If we send "casa_edoardo.fiore", it strips "casa_" and works.
+            // Let's send simple name to be clean, or full? 
+            // The previous logic used clientIdentifier. 
+            // I'll stick to c.name (simple).
             opt.textContent = displayName;
             select.appendChild(opt);
             optionsAdded++;
         });
-        
+
         if (optionsAdded === 0) {
             select.innerHTML = '<option value="" disabled>Nessun client disponibile o tutti già in un gruppo.</option>';
             select.disabled = true;
@@ -274,31 +285,45 @@ async function addMember() {
     if (result.success) {
         bootstrap.Modal.getInstance(document.getElementById('modal-add-member')).hide();
         loadGroups(); // Reload to refresh member list
+
     } else {
         alert("Errore: " + result.body.detail);
     }
 }
 
-async function removeMember(clientId) {
+function removeMember(clientIdentifier) {
     if (!currentInstance) return;
-    if (!confirm(`Rimuovere utente dal gruppo?`)) return;
 
-    const response = await fetch(`${API_AJAX_HANDLER}`, {
+    // Display Name logic (strip instance prefix)
+    let displayName = clientIdentifier;
+    if (clientIdentifier.startsWith(currentInstance.name + "_")) {
+        displayName = clientIdentifier.replace(currentInstance.name + "_", "");
+    }
+
+    document.getElementById('revoke-member-name').textContent = displayName;
+    document.getElementById('confirm-revoke-member-btn').onclick = () => performRevokeMember(clientIdentifier);
+    new bootstrap.Modal(document.getElementById('modal-revoke-member-confirm')).show();
+}
+
+async function performRevokeMember(clientId) {
+    // Note: clientId here is the full identifier used in the list value
+
+    const response = await fetch(`${API_AJAX_HANDLER} `, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
             action: 'remove_group_member',
             group_id: currentGroupId,
             client_identifier: clientId,
-            instance_name: currentInstance.name // We know it matches
+            instance_name: currentInstance.name
         })
     });
 
     const result = await response.json();
     if (result.success) {
-        loadGroups();
+        loadGroups(); // Reload
     } else {
-        alert("Errore: " + result.body.detail);
+        alert("Errore rimozione: " + (result.body.detail || "Sconosciuto"));
     }
 }
 
@@ -336,17 +361,17 @@ async function loadRules(groupId) {
                     }
                     return true; // Allow move otherwise
                 },
-                onEnd: function(evt) {
+                onEnd: function (evt) {
                     // Get the moved item
                     const movedItem = window.currentRules.splice(evt.oldIndex, 1)[0];
                     // Insert it at the new index
                     window.currentRules.splice(evt.newIndex, 0, movedItem);
-                    
+
                     // The UI is already updated by SortableJS, we just need to save the new order.
                     applyRuleOrder();
                 }
             });
-            
+
         } else {
             tbody.innerHTML = '<tr><td colspan="6" class="text-center text-danger">Errore caricamento regole.</td></tr>';
         }
@@ -390,7 +415,7 @@ function renderRules(rules) {
                         <i class="ti ti-trash"></i>
                     </button>
                 </td>
-            `;
+        `;
             tbody.appendChild(tr);
         });
     }
@@ -398,7 +423,7 @@ function renderRules(rules) {
     // Always add a virtual rule for the instance's default firewall policy at the end
     const trDefault = document.createElement('tr');
     trDefault.className = 'table-secondary non-draggable-rule'; // Style to distinguish it and make non-draggable
-    
+
     let defaultPolicyDisplay = 'N/A';
     let defaultPolicyBadgeClass = 'bg-secondary';
     let defaultPolicyTitle = 'Policy di default dell\'istanza (caricamento...)';
@@ -420,7 +445,7 @@ function renderRules(rules) {
         <td class="text-end">
             <span class="text-muted" title="${defaultPolicyTitle}">Default Instance Policy</span>
         </td>
-    `;
+        `;
     tbody.appendChild(trDefault);
 
     // Store current rules to handle reordering logic locally before saving
@@ -448,7 +473,7 @@ function togglePortInput(protocol, modalType = 'add') {
     const portInput = document.getElementById(portInputId);
 
     if (!portContainer) return;
-    
+
     if (protocol === 'tcp' || protocol === 'udp') {
         portContainer.style.display = 'block';
     } else {
@@ -515,7 +540,7 @@ async function createRule() {
         port = null;
     }
 
-    const response = await fetch(`${API_AJAX_HANDLER}?action=create_rule`, {
+    const response = await fetch(`${API_AJAX_HANDLER}?action = create_rule`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -537,7 +562,7 @@ async function createRule() {
         document.getElementById('rule-action').value = 'ACCEPT';
         document.getElementById('rule-proto').value = 'tcp';
         togglePortInput();
-        
+
         const modalInstance = bootstrap.Modal.getInstance(document.getElementById('modal-add-rule'));
         if (modalInstance) {
             modalInstance.hide();
@@ -557,7 +582,7 @@ function openCreateRuleModal() {
     document.getElementById('rule-port').value = '';
     document.getElementById('rule-desc').value = '';
     // Ensure port input visibility is correct for default protocol
-    togglePortInput('tcp', 'add'); 
+    togglePortInput('tcp', 'add');
 
     new bootstrap.Modal(document.getElementById('modal-add-rule')).show();
 }
@@ -576,7 +601,7 @@ function confirmDeleteRule(ruleId) {
     if (rule.action === 'DROP') badgeClass = 'bg-danger';
 
     const ruleDescriptionHtml = `
-        <strong>Azione:</strong> <span class="badge ${badgeClass}">${rule.action}</span><br>
+            < strong > Azione:</strong > <span class="badge ${badgeClass}">${rule.action}</span><br>
         <strong>Protocollo:</strong> ${rule.protocol.toUpperCase()}<br>
         <strong>Destinazione:</strong> <code>${rule.destination}</code><br>
         <strong>Porta:</strong> ${rule.port || '*'}
@@ -613,7 +638,7 @@ function openEditRuleModal(ruleId) {
         showNotification('danger', 'Regola non trovata per la modifica.');
         return;
     }
-    
+
     window.currentEditingRule = rule; // Store the rule being edited
 
     // Populate the form fields
@@ -741,7 +766,7 @@ async function applyRuleOrder() {
         if (result.success) {
             showNotification('success', 'Ordinamento delle regole salvato.');
             // We can optionally reload to be safe, but the local state should be correct.
-            loadRules(currentGroupId); 
+            loadRules(currentGroupId);
         } else {
             showNotification('danger', `Errore durante il salvataggio dell'ordine: ${result.body.detail || 'Sconosciuto'}`);
             // Fallback to reload from server on error

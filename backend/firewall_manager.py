@@ -5,7 +5,7 @@ from sqlmodel import Session, select
 import uuid
 
 from database import engine
-from models import Group, GroupMember, FirewallRule, Client, Instance
+from models import Group, GroupMember, FirewallRule, Client, Instance, GroupRead
 import iptables_manager
 import instance_manager
 import ip_manager
@@ -61,11 +61,36 @@ def delete_group(group_id: str):
             session.commit()
             apply_firewall_rules()
 
-def get_groups(instance_id: Optional[str] = None) -> List[Group]:
+def get_groups(instance_id: Optional[str] = None) -> List[GroupRead]:
+    from sqlalchemy.orm import selectinload
     with Session(engine) as session:
+        statement = select(Group).options(
+            selectinload(Group.client_links).selectinload(GroupMember.client),
+            selectinload(Group.instance)
+        )
         if instance_id:
-            return session.exec(select(Group).where(Group.instance_id == instance_id)).all()
-        return session.exec(select(Group)).all()
+            statement = statement.where(Group.instance_id == instance_id)
+        
+        groups = session.exec(statement).all()
+        
+        result = []
+        for g in groups:
+            # Construct member list as strings "instance_client"
+            # Logic: If client_identifier in frontend is "instance_client", we reconstruct it.
+            # Client.name is just the name. Instance.name is the prefix.
+            members_list = []
+            for link in g.client_links:
+                if link.client and g.instance:
+                     members_list.append(f"{g.instance.name}_{link.client.name}")
+            
+            result.append(GroupRead(
+                id=g.id,
+                instance_id=g.instance_id,
+                name=g.name,
+                description=g.description,
+                members=members_list
+            ))
+        return result
 
 def add_member_to_group(group_id: str, client_identifier: str, subnet_info: Dict[str, str]):
     # client_identifier e.g. "instance_clientname" or just "clientname"?
@@ -132,7 +157,18 @@ def remove_member_from_group(group_id: str, client_identifier: str, instance_nam
 
 def add_rule(rule_data: dict) -> FirewallRule:
     with Session(engine) as session:
+        # Calculate next order
+        current_max = session.exec(
+            select(FirewallRule.order)
+            .where(FirewallRule.group_id == rule_data["group_id"])
+            .order_by(FirewallRule.order.desc())
+        ).first()
+        
+        next_order = (current_max if current_max is not None else -1) + 1
+        
         rule = FirewallRule(**rule_data)
+        rule.order = next_order # Enforce order
+        
         session.add(rule)
         session.commit()
         session.refresh(rule)

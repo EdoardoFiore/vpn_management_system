@@ -57,6 +57,14 @@ class Group(SQLModel, table=True):
     client_links: List["GroupMember"] = Relationship(back_populates="group")
     rules: List["FirewallRule"] = Relationship(back_populates="group")
 
+class GroupRead(SQLModel):
+    id: str
+    instance_id: str
+    name: str
+    description: str
+    members: List[str] = []
+
+
 
 class GroupMember(SQLModel, table=True):
     """Junction table for Many-to-Many between Groups and Clients"""

@@ -108,7 +108,7 @@ async function fetchAndRenderClients() {
                                 <div><i class="ti ti-arrow-down icon-sm text-green"></i> ${formatBytes(client.bytes_received)}</div>
                                 <div><i class="ti ti-arrow-up icon-sm text-blue"></i> ${formatBytes(client.bytes_sent)}</div>
                             </td>
-                            <td>${formatDateTime(client.connected_since)}</td>
+
                             <td>
                                 <button class="btn btn-danger btn-sm btn-icon" onclick="revokeClient('${fullName}')">
                                     <i class="ti ti-trash"></i>
@@ -136,7 +136,7 @@ async function fetchAndRenderClients() {
 
 async function showQRCode(clientName) {
     if (!currentInstance) return;
-    
+
     // Clear previous QR
     const container = document.getElementById('qrcode-container');
     container.innerHTML = 'Caricamento...';
@@ -148,11 +148,11 @@ async function showQRCode(clientName) {
         // or we use the download link and fetch it as text.
         const url = `${API_AJAX_HANDLER}?action=download_client&instance_id=${currentInstance.id}&client_name=${clientName}`;
         const response = await fetch(url);
-        
+
         if (!response.ok) throw new Error("Impossibile recuperare la configurazione.");
-        
+
         const configText = await response.text();
-        
+
         // Render QR
         container.innerHTML = '';
         new QRCode(container, {
@@ -430,7 +430,7 @@ async function saveRoutes() {
     // Helper functions for validation
     const ipRegex = /^(?:(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.){3}(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)$/;
     const cidrRegex = /^([0-9]{1,3}\.){3}[0-9]{1,3}\/([0-9]|[1-2][0-9]|3[0-2])$/;
-    
+
     // --- Clear previous validation states ---
     document.querySelectorAll('#routes-edit-mode .is-invalid').forEach(el => el.classList.remove('is-invalid'));
 
@@ -443,7 +443,7 @@ async function saveRoutes() {
                 if (!ipRegex.test(ip)) {
                     isValid = false;
                     dnsInput.classList.add('is-invalid');
-                    break; 
+                    break;
                 }
             }
         }
@@ -456,7 +456,7 @@ async function saveRoutes() {
             const routeId = input.getAttribute('data-edit-route-network');
             const network = input.value.trim();
             const interfaceSelect = document.querySelector(`[data-edit-route-interface="${routeId}"]`);
-            
+
             if (network === '' || !cidrRegex.test(network)) {
                 isValid = false;
                 input.classList.add('is-invalid');
@@ -464,9 +464,9 @@ async function saveRoutes() {
 
             if (!interfaceSelect || interfaceSelect.value === '') {
                 isValid = false;
-                if(interfaceSelect) interfaceSelect.classList.add('is-invalid');
+                if (interfaceSelect) interfaceSelect.classList.add('is-invalid');
             }
-            
+
             if (network && interfaceSelect && interfaceSelect.value) {
                 routes.push({ network: network, interface: interfaceSelect.value });
             }
@@ -477,6 +477,21 @@ async function saveRoutes() {
         showNotification('danger', 'Uno o più campi non sono validi. Controlla e riprova.');
         return;
     }
+
+    // Check if Tunnel Mode Changed
+    if (tunnelMode !== currentInstance.tunnel_mode) {
+        const modal = new bootstrap.Modal(document.getElementById('modal-tunnel-change-confirm'));
+        document.getElementById('confirm-tunnel-change-btn').onclick = () => performRouteSave(tunnelMode, routes, dnsServers);
+        modal.show();
+        return;
+    }
+
+    // If no change, proceed directly
+    performRouteSave(tunnelMode, routes, dnsServers);
+}
+
+async function performRouteSave(tunnelMode, routes, dnsServers) {
+    if (!currentInstance) return;
 
     const payload = {
         action: 'update_instance_routes',

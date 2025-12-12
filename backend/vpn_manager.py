@@ -14,9 +14,33 @@ logger = logging.getLogger(__name__)
 
 def list_clients(instance_id: str) -> List[Dict]:
     with Session(engine) as session:
+        inst = session.get(Instance, instance_id)
+        if not inst: return []
+        
         clients = session.exec(select(Client).where(Client.instance_id == instance_id)).all()
-        # Convert to dict manually or use SQLModel's .dict() (but verify compatibility)
-        return [c.dict() for c in clients]
+        
+        # Get live status
+        connected_data = get_connected_clients(inst.name)
+        
+        result = []
+        for c in clients:
+            c_dict = c.dict()
+            if c.name in connected_data:
+                stats = connected_data[c.name]
+                c_dict["status"] = "connected"
+                c_dict["bytes_received"] = stats["bytes_received"]
+                c_dict["bytes_sent"] = stats["bytes_sent"]
+                c_dict["latest_handshake"] = stats["connected_since"]
+                c_dict["real_ip"] = stats["real_ip"]
+            else:
+                c_dict["status"] = "disconnected"
+                c_dict["bytes_received"] = 0
+                c_dict["bytes_sent"] = 0
+                c_dict["latest_handshake"] = 0
+                
+            result.append(c_dict)
+            
+        return result
 
 def get_connected_clients(instance_name: str) -> Dict:
     # ... (Same logic as before, parsing wg show, but mapping keys from DB)

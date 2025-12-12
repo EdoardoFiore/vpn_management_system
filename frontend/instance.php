@@ -40,7 +40,7 @@ require_once 'includes/header.php';
 </ul>
 
 <div class="tab-content">
-    
+
     <!-- Client Management Tab -->
     <div class="tab-pane active show" id="tab-clients">
         <div class="card mb-4">
@@ -51,8 +51,8 @@ require_once 'includes/header.php';
                 <form id="addClientForm" onsubmit="event.preventDefault(); createClient();">
                     <div class="row g-2">
                         <div class="col">
-                            <input type="text" id="clientNameInput" class="form-control" placeholder="Es: laptop-mario-rossi"
-                                required>
+                            <input type="text" id="clientNameInput" class="form-control"
+                                placeholder="Es: laptop-mario-rossi" required>
                             <div class="invalid-feedback">Solo lettere, numeri, trattini, punti e underscore.</div>
                         </div>
                         <div class="col-auto">
@@ -107,7 +107,7 @@ require_once 'includes/header.php';
                                     <th>Client</th>
                                     <th>Indirizzi IP</th>
                                     <th>Traffico</th>
-                                    <th>Connesso da</th>
+
                                     <th class="w-1"></th>
                                 </tr>
                             </thead>
@@ -121,7 +121,7 @@ require_once 'includes/header.php';
 
     <!-- Routes Tab -->
     <div class="tab-pane" id="tab-routes">
-         <div class="card">
+        <div class="card">
             <div class="card-header">
                 <h3 class="card-title">Rotte e DNS Personalizzati</h3>
                 <div class="card-actions">
@@ -185,7 +185,8 @@ require_once 'includes/header.php';
                         <option value="ACCEPT">ACCEPT (Consenti tutto ciò che non è esplicitamente bloccato)</option>
                         <option value="DROP">DROP (Blocca tutto ciò che non è esplicitamente consentito)</option>
                     </select>
-                    <small class="form-hint">Questa policy si applica a tutto il traffico che proviene dai client VPN di questa istanza e che non corrisponde a nessuna delle regole dei gruppi ACL definite.</small>
+                    <small class="form-hint">Questa policy si applica a tutto il traffico che proviene dai client VPN di
+                        questa istanza e che non corrisponde a nessuna delle regole dei gruppi ACL definite.</small>
                 </div>
                 <button class="btn btn-primary" onclick="saveInstanceFirewallPolicy()">Salva Policy</button>
             </div>
@@ -197,7 +198,8 @@ require_once 'includes/header.php';
                     <div class="card-header">
                         <h3 class="card-title">Gruppi</h3>
                         <div class="card-actions">
-                             <a href="#" class="btn btn-sm btn-primary" data-bs-toggle="modal" data-bs-target="#modal-create-group">
+                            <a href="#" class="btn btn-sm btn-primary" data-bs-toggle="modal"
+                                data-bs-target="#modal-create-group">
                                 <i class="ti ti-plus"></i> Nuovo
                             </a>
                         </div>
@@ -216,12 +218,13 @@ require_once 'includes/header.php';
                         <div class="card-header">
                             <h3 class="card-title" id="selected-group-title">Membri</h3>
                             <div class="card-actions">
-                                <button class="btn btn-sm btn-outline-danger" onclick="deleteCurrentGroup()">Elimina Gruppo</button>
+                                <button class="btn btn-sm btn-outline-danger" onclick="deleteCurrentGroup()">Elimina
+                                    Gruppo</button>
                                 <button class="btn btn-sm btn-primary" onclick="openAddMemberModal()">Aggiungi</button>
                             </div>
                         </div>
                         <div class="card-body p-0">
-                             <div class="table-responsive">
+                            <div class="table-responsive">
                                 <table class="table table-vcenter card-table">
                                     <thead>
                                         <tr>
@@ -240,7 +243,8 @@ require_once 'includes/header.php';
                         <div class="card-header">
                             <h3 class="card-title">Regole Firewall</h3>
                             <div class="card-actions">
-                                <button class="btn btn-sm btn-primary" onclick="openCreateRuleModal()">Aggiungi Regola</button>
+                                <button class="btn btn-sm btn-primary" onclick="openCreateRuleModal()">Aggiungi
+                                    Regola</button>
                             </div>
                         </div>
                         <div class="card-table table-responsive">
@@ -260,7 +264,7 @@ require_once 'includes/header.php';
                         </div>
                     </div>
                 </div>
-                
+
                 <div id="no-group-selected" class="card card-body text-center py-5">
                     <h3 class="text-muted">Seleziona un gruppo.</h3>
                 </div>
@@ -304,7 +308,7 @@ require_once 'includes/header.php';
                 <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
             </div>
             <div class="modal-body">
-                 <div class="mb-3">
+                <div class="mb-3">
                     <label class="form-label">Seleziona Cliente</label>
                     <select class="form-select" id="member-select">
                         <option value="">Caricamento...</option>
@@ -341,7 +345,8 @@ require_once 'includes/header.php';
                         </div>
                         <div class="col-md-6 mb-3">
                             <label class="form-label">Protocollo</label>
-                            <select class="form-select" id="rule-proto" name="protocol" onchange="togglePortInput(this.value, 'add')">
+                            <select class="form-select" id="rule-proto" name="protocol"
+                                onchange="togglePortInput(this.value, 'add')">
                                 <option value="tcp">TCP</option>
                                 <option value="udp">UDP</option>
                                 <option value="icmp">ICMP</option>
@@ -351,13 +356,16 @@ require_once 'includes/header.php';
                     </div>
                     <div class="mb-3">
                         <label class="form-label">Destinazione (CIDR o IP)</label>
-                        <input type="text" class="form-control" id="rule-dest" name="destination" placeholder="0.0.0.0/0 per tutto, o 192.168.1.50">
+                        <input type="text" class="form-control" id="rule-dest" name="destination"
+                            placeholder="0.0.0.0/0 per tutto, o 192.168.1.50">
                         <div class="invalid-feedback">Destinazione non valida. Inserisci un IP, un CIDR o 'any'.</div>
                     </div>
                     <div class="mb-3" id="port-container">
                         <label class="form-label">Porta (Opzionale)</label>
-                        <input type="text" class="form-control" id="rule-port" name="port" placeholder="80, 443, 1000:2000">
-                        <div class="invalid-feedback">Porta non valida. Inserisci un numero (1-65535) o un intervallo (es. 1000:2000).</div>
+                        <input type="text" class="form-control" id="rule-port" name="port"
+                            placeholder="80, 443, 1000:2000">
+                        <div class="invalid-feedback">Porta non valida. Inserisci un numero (1-65535) o un intervallo
+                            (es. 1000:2000).</div>
                     </div>
                     <div class="mb-3">
                         <label class="form-label">Descrizione</label>
@@ -395,7 +403,8 @@ require_once 'includes/header.php';
                         </div>
                         <div class="col-md-6 mb-3">
                             <label class="form-label">Protocollo</label>
-                            <select class="form-select" id="edit-rule-proto" name="protocol" onchange="togglePortInput('edit')">
+                            <select class="form-select" id="edit-rule-proto" name="protocol"
+                                onchange="togglePortInput('edit')">
                                 <option value="tcp">TCP</option>
                                 <option value="udp">UDP</option>
                                 <option value="icmp">ICMP</option>
@@ -405,13 +414,16 @@ require_once 'includes/header.php';
                     </div>
                     <div class="mb-3">
                         <label class="form-label">Destinazione (CIDR o IP)</label>
-                        <input type="text" class="form-control" id="edit-rule-dest" name="destination" placeholder="0.0.0.0/0 per tutto, o 192.168.1.50">
+                        <input type="text" class="form-control" id="edit-rule-dest" name="destination"
+                            placeholder="0.0.0.0/0 per tutto, o 192.168.1.50">
                         <div class="invalid-feedback">Destinazione non valida. Inserisci un IP, un CIDR o 'any'.</div>
                     </div>
                     <div class="mb-3" id="edit-port-container">
                         <label class="form-label">Porta (Opzionale)</label>
-                        <input type="text" class="form-control" id="edit-rule-port" name="port" placeholder="80, 443, 1000:2000">
-                        <div class="invalid-feedback">Porta non valida. Inserisci un numero (1-65535) o un intervallo (es. 1000:2000).</div>
+                        <input type="text" class="form-control" id="edit-rule-port" name="port"
+                            placeholder="80, 443, 1000:2000">
+                        <div class="invalid-feedback">Porta non valida. Inserisci un numero (1-65535) o un intervallo
+                            (es. 1000:2000).</div>
                     </div>
                     <div class="mb-3">
                         <label class="form-label">Descrizione</label>
@@ -438,11 +450,62 @@ require_once 'includes/header.php';
             <div class="modal-body">
                 <p>Sei sicuro di voler eliminare la seguente regola?</p>
                 <div id="delete-rule-summary" class="mb-3"></div>
-                <p class="text-muted">Questa azione non può essere annullata. La regola firewall verrà rimossa permanentemente.</p>
+                <p class="text-muted">Questa azione non può essere annullata. La regola firewall verrà rimossa
+                    permanentemente.</p>
             </div>
             <div class="modal-footer">
                 <button type="button" class="btn me-auto" data-bs-dismiss="modal">Annulla</button>
-                <button type="button" class="btn btn-danger" id="confirm-delete-rule-button" data-bs-dismiss="modal">Sì, elimina</button>
+                <button type="button" class="btn btn-danger" id="confirm-delete-rule-button" data-bs-dismiss="modal">Sì,
+                    elimina</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Modal Tunnel Change Confirm -->
+<div class="modal modal-blur fade" id="modal-tunnel-change-confirm" tabindex="-1" role="dialog" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered" role="document">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title text-warning">Attenzione: Cambio Modalità Tunnel</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <p>Stai cambiando la modalità del tunnel (da Full a Split o viceversa).</p>
+                <div class="alert alert-warning">
+                    <i class="ti ti-alert-triangle icon me-2"></i>
+                    IMPORTANTE: I client <strong>NON</strong> riceveranno automaticamente la nuova configurazione.
+                </div>
+                <p>Per applicare le modifiche (routing del traffico), sarà necessario <strong>scaricare nuovamente il
+                        file di configurazione</strong> o scansionare il QR code su <strong>TUTTI</strong> i dispositivi
+                    connessi.</p>
+                <p>Vuoi procedere?</p>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn me-auto" data-bs-dismiss="modal">Annulla</button>
+                <button type="button" class="btn btn-warning" id="confirm-tunnel-change-btn" data-bs-dismiss="modal">Sì,
+                    applica modifiche</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Modal Revoke Member Confirm -->
+<div class="modal modal-blur fade" id="modal-revoke-member-confirm" tabindex="-1" role="dialog" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered" role="document">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">Rimuovi Utente dal Gruppo</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <p>Sei sicuro di voler rimuovere <strong id="revoke-member-name"></strong> dal gruppo?</p>
+                <p class="text-muted">L'utente perderà immediatamente le autorizzazioni associate a questo gruppo.</p>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn me-auto" data-bs-dismiss="modal">Annulla</button>
+                <button type="button" class="btn btn-danger" id="confirm-revoke-member-btn" data-bs-dismiss="modal">Sì,
+                    rimuovi</button>
             </div>
         </div>
     </div>
@@ -462,7 +525,8 @@ require_once 'includes/header.php';
             </div>
             <div class="modal-footer">
                 <button type="button" class="btn me-auto" data-bs-dismiss="modal">Annulla</button>
-                <button type="button" class="btn btn-danger" id="confirm-revoke-button" data-bs-dismiss="modal">Sì, revoca</button>
+                <button type="button" class="btn btn-danger" id="confirm-revoke-button" data-bs-dismiss="modal">Sì,
+                    revoca</button>
             </div>
         </div>
     </div>
@@ -477,11 +541,13 @@ require_once 'includes/header.php';
                 <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
             </div>
             <div class="modal-body">
-                Sei sicuro di voler eliminare questa istanza? Tutti i client e le configurazioni associate verranno rimosse permanentemente. Questa azione non può essere annullata.
+                Sei sicuro di voler eliminare questa istanza? Tutti i client e le configurazioni associate verranno
+                rimosse permanentemente. Questa azione non può essere annullata.
             </div>
             <div class="modal-footer">
                 <button type="button" class="btn me-auto" data-bs-dismiss="modal">Annulla</button>
-                <button type="button" class="btn btn-danger" onclick="deleteInstanceAction()" data-bs-dismiss="modal">Sì, elimina</button>
+                <button type="button" class="btn btn-danger" onclick="deleteInstanceAction()"
+                    data-bs-dismiss="modal">Sì, elimina</button>
             </div>
         </div>
     </div>
