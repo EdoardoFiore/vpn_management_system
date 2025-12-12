@@ -19,7 +19,12 @@ class MachineFirewallManager:
     def get_all_rules(self) -> List[Dict]:
         with Session(engine) as session:
             rules = session.exec(select(MachineFirewallRule).order_by(MachineFirewallRule.order)).all()
-            return [r.dict() for r in rules]
+            result = []
+            for r in rules:
+                d = r.dict()
+                d['id'] = str(d['id'])
+                result.append(d)
+            return result
 
     def add_rule(self, rule_data: Dict) -> Dict:
         with Session(engine) as session:
@@ -27,11 +32,16 @@ class MachineFirewallManager:
                 rule_data["id"] = uuid.uuid4()
             
             # Determine order
-            if rule_data.get("order") is None:
-                max_order = -1
+                # Order calculation: We want the new rule to be at the END of the list.
+                # If we use global ordering, we must ensure it's > max(all_rules).
+                # The user reported "rule goes in second position", which suggests reordering logic might be flawed 
+                # or we are calculating max wrong. 
+                # Let's ensure strict increasing order.
                 existing = session.exec(select(MachineFirewallRule)).all()
                 if existing:
                     max_order = max(r.order for r in existing)
+                else:
+                    max_order = -1
                 rule_data["order"] = max_order + 1
             
             # Alias 'table' -> 'table_name' for model if needed, but model handles alias
@@ -44,7 +54,9 @@ class MachineFirewallManager:
             session.refresh(rule)
             
             self.apply_all_rules()
-            return rule.dict()
+            res = rule.dict()
+            res['id'] = str(res['id'])
+            return res
 
     def delete_rule(self, rule_id: str):
         with Session(engine) as session:
@@ -55,10 +67,13 @@ class MachineFirewallManager:
             session.commit()
             
             # Reorder
+            # Reorder all rules to close the gap
+            # This is crucial: if we have gaps, max() logic works, but normalized list is cleaner.
             rules = session.exec(select(MachineFirewallRule).order_by(MachineFirewallRule.order)).all()
             for i, r in enumerate(rules):
                 r.order = i
                 session.add(r)
+            session.commit()
             session.commit()
             
             self.apply_all_rules()
@@ -79,7 +94,9 @@ class MachineFirewallManager:
             session.commit()
             session.refresh(rule)
             self.apply_all_rules()
-            return rule.dict()
+            res = rule.dict()
+            res['id'] = str(res['id'])
+            return res
 
     def update_rule_order(self, orders: List[Dict]):
         with Session(engine) as session:
@@ -123,33 +140,38 @@ class MachineFirewallManager:
                 # We should update iptables_manager to be more flexible or map it.
                 # Easiest: Map fields manually here to a list of args.
                 
-                cmd = ["iptables", "-A", target_chain] # Append order
-                if rule.table_name != "filter":
-                    cmd = ["iptables", "-t", rule.table_name, "-A", target_chain]
+                # Construct arguments for _run_iptables
+                # _run_iptables takes (table, args_list) and prepends 'iptables', '-t table'
+                # So we just need the arguments starting from the action (-A).
                 
-                if rule.protocol: cmd.extend(["-p", rule.protocol])
-                if rule.source: cmd.extend(["-s", rule.source])
-                if rule.destination: cmd.extend(["-d", rule.destination])
-                if rule.in_interface: cmd.extend(["-i", rule.in_interface])
-                if rule.out_interface: cmd.extend(["-o", rule.out_interface])
-                if rule.state: cmd.extend(["-m", "state", "--state", rule.state])
+                # Base command logic above constructed a full command list for reference/debugging
+                # We need to extract just the args.
+                
+                # Determine action args
+                action_args = ["-A", target_chain]
+                
+                args = []
+                args.extend(action_args)
+                
+                if rule.protocol: args.extend(["-p", rule.protocol])
+                if rule.source: args.extend(["-s", rule.source])
+                if rule.destination: args.extend(["-d", rule.destination])
+                if rule.in_interface: args.extend(["-i", rule.in_interface])
+                if rule.out_interface: args.extend(["-o", rule.out_interface])
+                if rule.state: args.extend(["-m", "state", "--state", rule.state])
                 
                 if rule.port and rule.action not in ["MASQUERADE", "SNAT", "DNAT"]:
-                    cmd.extend(["--dport", rule.port])
-                
-                cmd.extend(["-m", "comment", "--comment", f"ID_{rule.id}"])
+                     args.extend(["--dport", str(rule.port)])
+
+                args.extend(["-m", "comment", "--comment", f"ID_{rule.id}"])
                 
                 if rule.action == "MASQUERADE":
-                    cmd.extend(["-j", "MASQUERADE"])
+                    args.extend(["-j", "MASQUERADE"])
                 elif rule.action == "SNAT":
-                    cmd.extend(["-j", "SNAT", "--to-source", rule.destination]) # Re-using field
+                    args.extend(["-j", "SNAT", "--to-source", rule.destination])
                 else:
-                    cmd.extend(["-j", rule.action])
+                    args.extend(["-j", rule.action])
                 
-                iptables_manager._run_iptables(rule.table_name, cmd[2:]) # Pass only args, helper adds 'iptables -t ...' logic?
-                # _run_iptables helper logic: command = ["/usr/sbin/iptables"]; if table!=filter add -t. extend(args).
-                # So we just pass the args list starting from "-A".
-                
-                iptables_manager._run_iptables(rule.table_name, cmd[cmd.index("-A"):])
+                iptables_manager._run_iptables(rule.table_name, args)
 
 machine_firewall_manager = MachineFirewallManager()

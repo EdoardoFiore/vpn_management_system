@@ -12,7 +12,7 @@ class InstanceBase(SQLModel):
     interface: str = Field(unique=True)
     tunnel_mode: str = "full"
     routes: List[Dict] = Field(default=[], sa_column=Column(JSON))
-    dns_servers: List[str] = Field(default=["1.1.1.1"], sa_column=Column(JSON))
+    dns_servers: List[str] = Field(default=["8.8.8.8", "1.1.1.1"], sa_column=Column(JSON))
     firewall_default_policy: str = "ACCEPT"
     status: str = "stopped"
     type: str = "wireguard"

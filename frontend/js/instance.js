@@ -480,7 +480,48 @@ async function saveRoutes() {
 
     // Check if Tunnel Mode Changed
     if (tunnelMode !== currentInstance.tunnel_mode) {
-        const modal = new bootstrap.Modal(document.getElementById('modal-tunnel-change-confirm'));
+        const modalElement = document.getElementById('modal-tunnel-change-confirm');
+        const modalBody = document.getElementById('modal-tunnel-change-body-content');
+
+        // Determine direction
+        const isToSplit = tunnelMode === 'split';
+        const isToFull = tunnelMode === 'full';
+
+        let extraInfo = '';
+
+        if (isToSplit) {
+            extraInfo = `
+                <div class="alert alert-info mt-3">
+                    <i class="ti ti-info-circle icon me-2"></i>
+                    <strong>Firewall Policy:</strong> La policy di default verrà impostata automaticamente su <strong>DROP</strong>.
+                    <br><small class="text-muted">Questo serve a bloccare tutto il traffico non esplicitamente permesso dalle rotte specificate, garantendo la sicurezza in modalità Split Tunnel.</small>
+                </div>
+            `;
+        } else if (isToFull) {
+            extraInfo = `
+                <div class="alert alert-info mt-3">
+                    <i class="ti ti-info-circle icon me-2"></i>
+                    <strong>Nota Firewall:</strong> Se la policy attuale è DROP, ricorda che in Full Tunnel i client potrebbero non riuscire a navigare su Internet se non configuri regole di permesso appropriate (MASQUERADE/Forwarding).
+                    <br><small class="text-muted">Il sistema non cambierà automaticamente la policy in questo caso.</small>
+                </div>
+            `;
+        }
+
+        modalBody.innerHTML = `
+            <p>Stai cambiando la modalità del tunnel da <strong>${currentInstance.tunnel_mode.toUpperCase()}</strong> a <strong>${tunnelMode.toUpperCase()}</strong>.</p>
+            
+            <div class="alert alert-warning">
+                <i class="ti ti-alert-triangle icon me-2"></i>
+                IMPORTANTE: I client <strong>NON</strong> si aggiorneranno da soli.
+            </div>
+            <p>È necessario <strong>riscaricare la configurazione</strong> (o scansionare il QR) su <strong>TUTTI</strong> i client per applicare le nuove regole di routing.</p>
+            
+            ${extraInfo}
+            
+            <p class="mt-3">Vuoi procedere con le modifiche?</p>
+        `;
+
+        const modal = new bootstrap.Modal(modalElement);
         document.getElementById('confirm-tunnel-change-btn').onclick = () => performRouteSave(tunnelMode, routes, dnsServers);
         modal.show();
         return;

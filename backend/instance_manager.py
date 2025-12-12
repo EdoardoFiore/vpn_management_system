@@ -194,14 +194,26 @@ def update_instance_routes(instance_id: str, tunnel_mode: str, routes: List[Dict
             instance.routes = []
         else:
             instance.routes = routes # SQLModel handles JSON serialization
+            # Security: Force DROP policy on Split Tunnel to strictly enforce allowed routes
+            instance.firewall_default_policy = "DROP"
 
         if dns_servers is not None:
-            instance.dns_servers = dns_servers
+            # If empty list is provided, fallback to default (User request)
+            if not dns_servers:
+                instance.dns_servers = ["8.8.8.8", "1.1.1.1"]
+            else:
+                instance.dns_servers = dns_servers
         
         session.add(instance)
         session.commit()
         session.refresh(instance)
         
+        try:
+            import firewall_manager
+            firewall_manager.apply_firewall_rules()
+        except Exception as e:
+            logger.error(f"Firewall update failed after route change: {e}")
+
         return instance
 
 def update_instance_firewall_policy(instance_id: str, new_policy: str) -> Instance:

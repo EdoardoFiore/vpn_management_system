@@ -471,15 +471,10 @@ require_once 'includes/header.php';
                 <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
             </div>
             <div class="modal-body">
-                <p>Stai cambiando la modalità del tunnel (da Full a Split o viceversa).</p>
-                <div class="alert alert-warning">
-                    <i class="ti ti-alert-triangle icon me-2"></i>
-                    IMPORTANTE: I client <strong>NON</strong> riceveranno automaticamente la nuova configurazione.
+                <div id="modal-tunnel-change-body-content">
+                    <!-- Dynamic content will be injected here -->
+                    <p>Stai cambiando la modalità del tunnel.</p>
                 </div>
-                <p>Per applicare le modifiche (routing del traffico), sarà necessario <strong>scaricare nuovamente il
-                        file di configurazione</strong> o scansionare il QR code su <strong>TUTTI</strong> i dispositivi
-                    connessi.</p>
-                <p>Vuoi procedere?</p>
             </div>
             <div class="modal-footer">
                 <button type="button" class="btn me-auto" data-bs-dismiss="modal">Annulla</button>

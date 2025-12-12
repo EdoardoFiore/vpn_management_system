@@ -540,7 +540,7 @@ async function createRule() {
         port = null;
     }
 
-    const response = await fetch(`${API_AJAX_HANDLER}?action = create_rule`, {
+    const response = await fetch(`${API_AJAX_HANDLER}?action=create_rule`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -601,8 +601,8 @@ function confirmDeleteRule(ruleId) {
     if (rule.action === 'DROP') badgeClass = 'bg-danger';
 
     const ruleDescriptionHtml = `
-            < strong > Azione:</strong > <span class="badge ${badgeClass}">${rule.action}</span><br>
-        <strong>Protocollo:</strong> ${rule.protocol.toUpperCase()}<br>
+            <strong>Azione:</strong> <span class="badge ${badgeClass}">${rule.action}</span><br>
+            <strong>Protocollo:</strong> ${rule.protocol.toUpperCase()}<br>
         <strong>Destinazione:</strong> <code>${rule.destination}</code><br>
         <strong>Porta:</strong> ${rule.port || '*'}
     `;

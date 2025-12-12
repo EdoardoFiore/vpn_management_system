@@ -173,7 +173,10 @@ def add_rule(rule_data: dict) -> FirewallRule:
         session.commit()
         session.refresh(rule)
         apply_firewall_rules()
-        return rule
+        apply_firewall_rules()
+        res = rule.dict()
+        res['id'] = str(res['id'])
+        return res
 
 def delete_rule(rule_id: str):
     with Session(engine) as session:
@@ -200,7 +203,10 @@ def update_rule(rule_id: str, group_id: str, action: str, protocol: str, destina
         session.commit()
         session.refresh(rule)
         apply_firewall_rules()
-        return rule
+        apply_firewall_rules()
+        res = rule.dict()
+        res['id'] = str(res['id'])
+        return res
 
 def update_rule_order(orders: List[Dict]):
     with Session(engine) as session:
@@ -215,15 +221,27 @@ def update_rule_order(orders: List[Dict]):
 def get_rules(group_id: Optional[str] = None) -> List[FirewallRule]:
     with Session(engine) as session:
         if group_id:
-            return session.exec(select(FirewallRule).where(FirewallRule.group_id == group_id)).all()
-        return session.exec(select(FirewallRule)).all()
+            rules = session.exec(select(FirewallRule).where(FirewallRule.group_id == group_id)).all()
+        else:
+            rules = session.exec(select(FirewallRule)).all()
+        
+        result = []
+        for r in rules:
+            d = r.dict()
+            d['id'] = str(d['id'])
+            # Ensure Client Link UUIDs are also strings if present, though likely not in this dict
+            result.append(d)
+        return result
 
 # --- Application ---
 
 def _run_iptables(cmd: List[str]):
     try:
-        subprocess.run(cmd, check=False, capture_output=True)
-    except: pass
+        result = subprocess.run(cmd, check=False, capture_output=True, text=True)
+        if result.returncode != 0:
+            logger.error(f"Group Firewall Iptables Error: {result.stderr.strip()} CMD: {' '.join(cmd)}")
+    except Exception as e:
+        logger.error(f"Group Firewall Execution Error: {e}")
 
 def apply_firewall_rules():
     logger.info("Applying Firewall Rules (SQLModel)...")
