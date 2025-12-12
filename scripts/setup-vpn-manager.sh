@@ -58,13 +58,29 @@ echo ""
 log_info "Fase 1/5: Aggiornamento sistema e installazione WireGuard..."
 
 apt-get update
-# Installazione pacchetti base e WireGuard
-# iptables-persistent chiede conferma interattiva, usiamo DEBIAN_FRONTEND=noninteractive se vogliamo automatizzare tutto, 
-# ma qui lasciamo interattivo per la sicurezza delle regole esistenti se presenti.
-if ! apt-get install -y wireguard wireguard-tools iptables iptables-persistent curl python3-pip python3-venv php8.1-fpm php8.1-curl nginx apache2-utils; then
-    # Fallback per versioni PHP diverse (es. su Ubuntu 24.04 potrebbe essere php8.3)
-    log_info "Tentativo installazione PHP default..."
-    apt-get install -y php-fpm php-curl
+
+# 1. Installazione pacchetti base e WireGuard
+log_info "Installazione WireGuard e strumenti di base..."
+if ! apt-get install -y wireguard wireguard-tools iptables iptables-persistent curl git; then
+    log_error "Errore nell'installazione dei pacchetti base. Uscita."
+    exit 1
+fi
+
+# 2. Installazione Stack Web (Nginx, PHP, Utils)
+log_info "Installazione Nginx e PHP..."
+# Installiamo apache2-utils esplicitamente per htpasswd
+if ! apt-get install -y nginx apache2-utils php-fpm php-curl; then
+    log_info "Tentativo installazione PHP con versione specifica (fallback)..."
+    # Fallback per Ubuntu 24.04 (php8.3) o precedenti
+    apt-get install -y nginx apache2-utils php8.3-fpm php8.3-curl || apt-get install -y php8.1-fpm php8.1-curl
+fi
+
+# 3. Installazione Python e Venv
+log_info "Installazione Python e Venv..."
+# Aggiungiamo python3-full per garantire ensurepip e venv
+if ! apt-get install -y python3-pip python3-venv sqlite3 python3-full; then
+     log_error "Errore nell'installazione di Python/Venv."
+     exit 1
 fi
 
 # Verifica modulo Kernel (opzionale su kernel recenti)
@@ -147,10 +163,7 @@ EOF
 # Configurazione Persistenza IPTables
 chmod +x /opt/vpn-manager/scripts/save-iptables.sh
 chmod +x /opt/vpn-manager/scripts/restore-iptables.sh
-cp /opt/vpn-manager/scripts/iptables-openvpn.service /etc/systemd/system/
-# Rename service file inside systemd if possible, but keep filename for compatibility or rename file too
-# Let's rename the file on destination for clarity
-mv /etc/systemd/system/iptables-openvpn.service /etc/systemd/system/iptables-vpn.service
+cp /opt/vpn-manager/scripts/iptables-vpn.service /etc/systemd/system/
 # Fix content of service file to point to correct scripts if needed (scripts names match)
 
 systemctl daemon-reload
@@ -178,6 +191,8 @@ log_success "Frontend deployato."
 # --- Fase 5: Nginx ---
 log_info "Fase 5/5: Configurazione Nginx..."
 
+mkdir -p /etc/nginx/sites-available
+mkdir -p /etc/nginx/sites-enabled
 cp ../nginx/vpn-dashboard.conf /etc/nginx/sites-available/
 rm -f /etc/nginx/sites-enabled/default
 ln -sf /etc/nginx/sites-available/vpn-dashboard.conf /etc/nginx/sites-enabled/

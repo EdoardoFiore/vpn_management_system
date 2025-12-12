@@ -1,10 +1,11 @@
 import subprocess
 import logging
 import uuid
-import json
-import os
-from typing import List, Union, Optional, Dict
-from pydantic import BaseModel
+from typing import List, Union, Optional, Dict, Any
+from sqlmodel import Session, select
+
+from database import engine
+from models import Instance, MachineFirewallRule
 
 logger = logging.getLogger(__name__)
 
@@ -20,7 +21,6 @@ FW_FORWARD_CHAIN = "FW_FORWARD"
 
 # --- Config Paths ---
 DATA_DIR = "/opt/vpn-manager/backend/data"
-VPN_RULES_CONFIG_FILE = os.path.join(DATA_DIR, "vpn_instance_rules.json") # Renamed
 
 def _get_default_interface():
     """Detects the default network interface."""
@@ -118,29 +118,7 @@ def _ensure_jump_rule(source_chain: str, target_chain: str, table: str = "filter
 
 # --- Persistence Models ---
 
-class VPNCfgRule(BaseModel): # Renamed from OpenVPNCfgRule
-    instance_id: str
-    port: int
-    protocol: str
-    interface: str # Renamed from tun_interface
-    subnet: str
-    outgoing_interface: str
-    
-def _load_vpn_rules_config() -> Dict[str, VPNCfgRule]:
-    if os.path.exists(VPN_RULES_CONFIG_FILE):
-        try:
-            with open(VPN_RULES_CONFIG_FILE, "r") as f:
-                data = json.load(f)
-                return {k: VPNCfgRule(**v) for k, v in data.items()}
-        except Exception as e:
-            logger.error(f"Error loading VPN rules config: {e}")
-            return {}
-    return {}
 
-def _save_vpn_rules_config(configs: Dict[str, VPNCfgRule]):
-    os.makedirs(os.path.dirname(VPN_RULES_CONFIG_FILE), exist_ok=True)
-    with open(VPN_RULES_CONFIG_FILE, "w") as f:
-        json.dump({k: v.dict() for k, v in configs.items()}, f, indent=4)
 
 def _build_iptables_args_from_rule(rule: MachineFirewallRule, operation: str = "-A") -> List[str]:
     args = [operation, rule.chain]
@@ -203,13 +181,14 @@ def apply_machine_firewall_rules(rules: List[MachineFirewallRule]):
     # Skipping full re-write for brevity, conceptually unchanged
     return True, None # Placeholder for full implementation if needed re-write
 
-import firewall_manager 
+ 
 
-def _apply_vpn_instance_rules(config: VPNCfgRule):
+def _apply_vpn_instance_rules(inst: Instance, outgoing_interface: str = "eth0"):
     """
     Applies rules for a single VPN instance (WireGuard) into its dedicated chains.
     """
-    inst_id = config.instance_id
+    inst_id = inst.id
+    protocol = "udp" # WireGuard uses UDP
     
     input_chain = f"VPN_INPUT_{inst_id}"
     output_chain = f"VPN_OUTPUT_{inst_id}"
@@ -221,19 +200,19 @@ def _apply_vpn_instance_rules(config: VPNCfgRule):
     
     # VPN_INPUT_{id}
     # Allow UDP traffic on Listen Port (WireGuard)
-    _run_iptables("filter", ["-A", input_chain, "-p", config.protocol, "--dport", str(config.port), "-j", "ACCEPT"])
+    _run_iptables("filter", ["-A", input_chain, "-p", protocol, "--dport", str(inst.port), "-j", "ACCEPT"])
     # Allow traffic from Interface (wgX)
-    _run_iptables("filter", ["-A", input_chain, "-i", config.interface, "-j", "ACCEPT"])
+    _run_iptables("filter", ["-A", input_chain, "-i", inst.interface, "-j", "ACCEPT"])
     _run_iptables("filter", ["-A", input_chain, "-j", "RETURN"])
     
     # VPN_OUTPUT_{id}
     # Allow traffic out to Interface
-    _run_iptables("filter", ["-A", output_chain, "-o", config.interface, "-j", "ACCEPT"])
+    _run_iptables("filter", ["-A", output_chain, "-o", inst.interface, "-j", "ACCEPT"])
     _run_iptables("filter", ["-A", output_chain, "-j", "RETURN"])
     
     # VPN_NAT_{id}
     # Masquerade traffic from VPN subnet going out to WAN
-    _run_iptables("nat", ["-A", nat_chain, "-s", config.subnet, "-o", config.outgoing_interface, "-j", "MASQUERADE"])
+    _run_iptables("nat", ["-A", nat_chain, "-s", inst.subnet, "-o", outgoing_interface, "-j", "MASQUERADE"])
     _run_iptables("nat", ["-A", nat_chain, "-j", "RETURN"])
     
     # Link to Parent Chains
@@ -244,26 +223,16 @@ def _apply_vpn_instance_rules(config: VPNCfgRule):
 def apply_all_vpn_rules(): # Renamed from apply_all_openvpn_rules
     logger.info("Applying all VPN firewall rules...")
     
-    configs = _load_vpn_rules_config()
-    
-    # 1. Reset Top-Level VPN Chains
-    _create_or_flush_chain(VPN_INPUT_CHAIN, "filter")
-    _create_or_flush_chain(VPN_OUTPUT_CHAIN, "filter")
-    _create_or_flush_chain(VPN_NAT_POSTROUTING_CHAIN, "nat")
-    _create_or_flush_chain(VPN_MAIN_FWD_CHAIN, "filter")
-    
-    # 2. Ensure Jumps from Main Chains
-    _ensure_jump_rule("INPUT", VPN_INPUT_CHAIN, "filter", 1)
-    _ensure_jump_rule("OUTPUT", VPN_OUTPUT_CHAIN, "filter", 1)
-    _ensure_jump_rule("POSTROUTING", VPN_NAT_POSTROUTING_CHAIN, "nat", 1)
-    _ensure_jump_rule("FORWARD", VPN_MAIN_FWD_CHAIN, "filter", 1)
-    
-    # 3. Apply Rules for Each Instance
-    for config in configs.values():
-        _apply_vpn_instance_rules(config)
+    with Session(engine) as session:
+        instances = session.exec(select(Instance)).all()
+        
+        # 3. Apply Rules for Each Instance
+        for inst in instances:
+            _apply_vpn_instance_rules(inst, outgoing_interface=DEFAULT_INTERFACE)
         
     # 4. Trigger Firewall Manager for Forwarding rules
     try:
+        import firewall_manager
         firewall_manager.apply_firewall_rules()
     except Exception as e:
         logger.error(f"Failed to trigger firewall_manager.apply_firewall_rules: {e}")
@@ -275,50 +244,26 @@ apply_all_openvpn_rules = apply_all_vpn_rules
 
 def add_vpn_instance_rules(port: int, proto: str, tun_interface: str, subnet: str, outgoing_interface: str = None):
     """
-    Adds/Updates configuration for a VPN instance (WireGuard).
+    Triggers re-application of all VPN rules from DB. Arguments are ignored as DB is source of truth.
+    Kept for compatibility with legacy calls.
     """
-    if outgoing_interface is None:
-        outgoing_interface = DEFAULT_INTERFACE
-        
-    instance_id = f"inst_{port}"
-    
-    config = VPNCfgRule(
-        instance_id=instance_id,
-        port=port,
-        protocol=proto,
-        interface=tun_interface, # Mapped to new field name
-        subnet=subnet,
-        outgoing_interface=outgoing_interface
-    )
-    
-    configs = _load_vpn_rules_config()
-    configs[instance_id] = config
-    _save_vpn_rules_config(configs)
-    
     apply_all_vpn_rules()
     return True
-
+    
 # Alias for backward compatibility
 add_openvpn_rules = add_vpn_instance_rules
 
 def remove_vpn_instance_rules(port: int, proto: str, tun_interface: str, subnet: str, outgoing_interface: str = None):
-    instance_id = f"inst_{port}"
-    configs = _load_vpn_rules_config()
-    if instance_id in configs:
-        del configs[instance_id]
-        _save_vpn_rules_config(configs)
-    
+    """
+    Triggers re-application of all VPN rules from DB. Arguments are ignored as DB is source of truth.
+    Kept for compatibility with legacy calls.
+    """
     apply_all_vpn_rules()
     return True
 
 # Alias
 remove_openvpn_rules = remove_vpn_instance_rules
 
-# Re-expose helper for other modules
+# Legacy helper - removed functionality
 def _load_openvpn_rules_config():
-    # Adapter: convert new config back to object with old field names if accessed by legacy code?
-    # Actually, firewall_manager accesses this. It expects 'tun_interface'.
-    # VPNCfgRule has 'interface'. We should update firewall_manager or alias the property.
-    # Let's alias the property in VPNCfgRule or return dicts.
-    # Simpler: Update firewall_manager to use 'interface' property.
-    return _load_vpn_rules_config()
+    return {}
