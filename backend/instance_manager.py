@@ -93,7 +93,7 @@ def create_instance(name: str, port: int, subnet: str,
         instance_id = name.lower().replace(" ", "_")
         
         if routes is None: routes = []
-        if dns_servers is None: dns_servers = ["1.1.1.1", "1.0.0.1"]
+        if not dns_servers: dns_servers = ["8.8.8.8", "1.1.1.1"]
 
         # 2. Key Gen
         priv_key, pub_key = wireguard_manager.WireGuardManager.generate_keypair()

@@ -1,4 +1,5 @@
 import logging
+import subprocess
 from typing import List, Dict, Optional
 from sqlmodel import Session, select
 import uuid

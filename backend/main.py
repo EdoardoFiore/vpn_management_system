@@ -158,13 +158,17 @@ app.add_middleware(
 async def get_instances():
     """Restituisce la lista di tutte le istanze OpenVPN con il conteggio dei client connessi."""
     instances = instance_manager.get_all_instances()
+    response_data = []
     for inst in instances:
+        # Convert to dict to append extra fields not in DB model
+        inst_dict = inst.dict()
         if inst.status == "running":
             connected = vpn_manager.get_connected_clients(inst.name)
-            inst.connected_clients = len(connected)
+            inst_dict["connected_clients"] = len(connected)
         else:
-            inst.connected_clients = 0
-    return instances
+            inst_dict["connected_clients"] = 0
+        response_data.append(inst_dict)
+    return response_data
 
 @app.get("/api/instances/{instance_id}", dependencies=[Depends(get_api_key)])
 async def get_instance(instance_id: str):
@@ -182,7 +186,7 @@ async def create_instance(request: InstanceRequest):
             name=request.name,
             port=request.port,
             subnet=request.subnet,
-            protocol=request.protocol,
+            # protocol=request.protocol, # WireGuard is always UDP
             tunnel_mode=request.tunnel_mode,
             routes=[route.dict() for route in request.routes],
             dns_servers=request.dns_servers
@@ -191,6 +195,9 @@ async def create_instance(request: InstanceRequest):
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
     except Exception as e:
+        import traceback
+        traceback.print_exc()
+        print(f"Error creating instance: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
 @app.delete("/api/instances/{instance_id}")

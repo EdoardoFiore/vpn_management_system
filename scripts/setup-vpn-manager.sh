@@ -54,6 +54,25 @@ for i in 3 2 1; do
 done
 echo ""
 
+# --- Signal Handling ---
+LAST_INT_TIME=0
+ctrl_c_handler() {
+    CURRENT_TIME=$(date +%s)
+    TIME_DIFF=$((CURRENT_TIME - LAST_INT_TIME))
+    
+    if [ $TIME_DIFF -le 2 ]; then
+        echo ""
+        log_error "Interruzione forzata dall'utente. Uscita..."
+        exit 130
+    else
+        echo ""
+        log_info "Premi di nuovo Ctrl+C entro 2 secondi per uscire."
+        LAST_INT_TIME=$CURRENT_TIME
+    fi
+}
+
+trap ctrl_c_handler SIGINT
+
 # --- Fase 1: Aggiornamento e Dipendenze ---
 log_info "Fase 1/5: Aggiornamento sistema e installazione WireGuard..."
 

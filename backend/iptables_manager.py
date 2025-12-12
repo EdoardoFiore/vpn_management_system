@@ -99,8 +99,10 @@ def _run_iptables(table: str, args: List[str], suppress_errors: bool = False):
             return False, e.stderr.strip()
 
 def _create_or_flush_chain(chain_name: str, table: str = "filter"):
-    res, _ = _run_iptables(table, ["-N", chain_name])
+    # Try to create chain, suppress error if it exists
+    res, _ = _run_iptables(table, ["-N", chain_name], suppress_errors=True)
     if not res:
+        # If creation failed (likely exists), flush it
         _run_iptables(table, ["-F", chain_name])
     return True
 

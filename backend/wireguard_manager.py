@@ -12,14 +12,15 @@ class WireGuardManager:
     """
 
     @staticmethod
-    def _run_wg_command(args: List[str]) -> str:
+    def _run_wg_command(args: List[str], input: str = None) -> str:
         """Esegue un comando 'wg' e restituisce lo stdout o solleva un errore."""
         try:
             result = subprocess.run(
                 ['wg'] + args,
                 capture_output=True,
                 text=True,
-                check=True
+                check=True,
+                input=input
             )
             return result.stdout.strip()
         except FileNotFoundError:
@@ -86,24 +87,27 @@ AllowedIPs = {allowed_ips}
                 lines = f.readlines()
             
             new_lines = []
-            in_peer_block = False
+            current_block = []
+            block_contains_target = False
+            
             for line in lines:
-                if line.strip().startswith("[Peer]"):
-                    in_peer_block = True
-                if in_peer_block and public_key in line:
-                    # Trovato il peer da rimuovere, saltiamo questo blocco
-                    in_peer_block = False
-                    continue 
-                
-                if in_peer_block and not line.strip(): # Linea vuota dopo Publickey del peer precedente
-                    in_peer_block = False # Finisce il blocco peer
-                
-                if not in_peer_block:
-                    new_lines.append(line)
+                stripped = line.strip()
+                if stripped.startswith("[Peer]") or stripped.startswith("[Interface]"):
+                    # Flush previous block (if any) if it wasn't the target
+                    if current_block and not block_contains_target:
+                        new_lines.extend(current_block)
+                    
+                    # Start new block
+                    current_block = [line]
+                    block_contains_target = False
+                else:
+                    current_block.append(line)
+                    if f"PublicKey = {public_key}" in stripped: # More precise match
+                        block_contains_target = True
 
-            # Rimuovere eventuali blocchi peer vuoti o linee in eccesso
-            # Questa logica di rimozione è basilare. Una regex sarebbe più robusta.
-            # Per ora ci basiamo sull'assunto che i blocchi peer siano ben formattati.
+            # Flush last block
+            if current_block and not block_contains_target:
+                new_lines.extend(current_block)
 
             with open(config_file_path, "w") as f:
                 f.writelines(new_lines)
@@ -120,20 +124,31 @@ AllowedIPs = {allowed_ips}
     def hot_reload_interface(interface_name: str):
         """
         Applica le modifiche a un'interfaccia WireGuard senza riavviare il servizio.
-        Utilizza 'wg syncconf'.
+        Utilizza 'wg syncconf' con l'output di 'wg-quick strip'.
         """
         config_file_path = f"/etc/wireguard/{interface_name}.conf"
         try:
+            # 1. Strip config (remove Address, DNS, etc. which wg doesn't understand)
+            stripped = subprocess.run(
+                ['wg-quick', 'strip', config_file_path],
+                check=True,
+                capture_output=True,
+                text=True
+            )
+            stripped_config = stripped.stdout
+
+            # 2. Sync config via stdin
             subprocess.run(
-                ['wg', 'syncconf', interface_name, config_file_path],
+                ['wg', 'syncconf', interface_name, '/dev/stdin'],
+                input=stripped_config,
                 check=True,
                 capture_output=True,
                 text=True
             )
             logger.info(f"Interfaccia WireGuard '{interface_name}' ricaricata a caldo.")
         except FileNotFoundError:
-            logger.error("Comando 'wg' non trovato. Assicurati che WireGuard sia installato e 'wg-tools' sia nel PATH.")
-            raise RuntimeError("WireGuard tools (wg) not found.")
+            logger.error("Comandi 'wg' o 'wg-quick' non trovati.")
+            raise RuntimeError("WireGuard tools not found.")
         except subprocess.CalledProcessError as e:
             logger.error(f"Errore nel ricaricamento a caldo dell'interfaccia '{interface_name}': {e.stderr.strip()}")
             raise RuntimeError(f"Failed to hot-reload WireGuard interface: {e.stderr.strip()}")

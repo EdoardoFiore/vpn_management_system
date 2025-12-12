@@ -5,28 +5,31 @@ import uuid
 
 # --- Models ---
 
-class Instance(SQLModel, table=True):
-    id: str = Field(primary_key=True) # e.g. "amministrazione"
+class InstanceBase(SQLModel):
     name: str
     port: int = Field(unique=True)
     subnet: str
     interface: str = Field(unique=True)
-    private_key: str
-    public_key: str
     tunnel_mode: str = "full"
-    
-    # JSON columns for complex types
     routes: List[Dict] = Field(default=[], sa_column=Column(JSON))
     dns_servers: List[str] = Field(default=["1.1.1.1"], sa_column=Column(JSON))
-    
     firewall_default_policy: str = "ACCEPT"
     status: str = "stopped"
     type: str = "wireguard"
 
+class Instance(InstanceBase, table=True):
+    id: str = Field(primary_key=True)
+    private_key: str
+    public_key: str
+    
     # Relationships
     clients: List["Client"] = Relationship(back_populates="instance")
     groups: List["Group"] = Relationship(back_populates="instance")
 
+class InstanceRead(InstanceBase):
+    id: str
+    public_key: str
+    connected_clients: int = 0
 
 class Client(SQLModel, table=True):
     id: uuid.UUID = Field(default_factory=uuid.uuid4, primary_key=True)
