@@ -201,9 +201,37 @@ ln -sf /etc/nginx/sites-available/vpn-dashboard.conf /etc/nginx/sites-enabled/
 HTPASSWD_FILE="/etc/nginx/.htpasswd"
 if [[ ! -f "$HTPASSWD_FILE" ]]; then
     log_info "Configurazione utente web..."
-    read -rp "Inserisci username per la dashboard: " NGINX_USER
-    if [[ -z "$NGINX_USER" ]]; then NGINX_USER="admin"; fi
-    htpasswd -Bc "$HTPASSWD_FILE" "$NGINX_USER"
+
+    echo -e "\033[1;35m"
+    cat << "EOF"
+ _   _  _____  _____  _____    
+| | | |/  ___||  ___|| ___ \    
+| | | |\ `--. | |__  | |_/ /  
+| | | | `--. \|  __| |    /   
+| |_| |/\__/ /| |___ | |\ \  
+ \___/ \____/ \____/ \_| \_|   
+EOF
+    echo -e "\033[0m"
+
+    while true; do
+        read -rp "Inserisci il nome utente per accedere alla dashboard web: " NGINX_USER
+
+        if [[ -z "$NGINX_USER" ]]; then
+            log_error "Il nome utente non può essere vuoto."
+            continue
+        fi
+
+        # La password verrà richiesta da htpasswd stesso in modo interattivo
+        htpasswd -Bc "$HTPASSWD_FILE" "$NGINX_USER"
+
+        if [[ $? -eq 0 ]]; then
+            log_success "Utente Nginx Basic Auth '$NGINX_USER' creato con successo."
+            break
+        else
+            log_error "Creazione utente fallita (o annullata). Riprova."
+        fi
+    done
+    
     chmod 644 "$HTPASSWD_FILE"
 fi
 
