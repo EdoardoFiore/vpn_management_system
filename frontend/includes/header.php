@@ -151,7 +151,9 @@ $currentRole = $_SESSION['role'] ?? 'viewer';
                                 class="avatar avatar-sm bg-blue-lt"><?= strtoupper(substr($currentUser, 0, 1)) ?></span>
                             <div class="d-none d-xl-block ps-2">
                                 <div><?= htmlspecialchars($currentUser) ?></div>
-                                <div class="mt-1 small text-muted"><?= htmlspecialchars(ucfirst($currentRole)) ?></div>
+                                <div class="mt-1 small text-muted">
+                                    <?= htmlspecialchars($currentRole === 'admin_readonly' ? 'Admin Read Only' : ucfirst($currentRole)) ?>
+                                </div>
                             </div>
                         </a>
                         <div class="dropdown-menu dropdown-menu-end dropdown-menu-arrow">
