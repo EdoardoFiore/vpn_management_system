@@ -87,11 +87,10 @@ fi
 
 # 2. Installazione Stack Web (Nginx, PHP, Utils)
 log_info "Installazione Nginx e PHP..."
-# Installiamo apache2-utils esplicitamente per htpasswd
-if ! apt-get install -y nginx apache2-utils php-fpm php-curl; then
+if ! apt-get install -y nginx php-fpm php-curl; then
     log_info "Tentativo installazione PHP con versione specifica (fallback)..."
     # Fallback per Ubuntu 24.04 (php8.3) o precedenti
-    apt-get install -y nginx apache2-utils php8.3-fpm php8.3-curl || apt-get install -y php8.1-fpm php8.1-curl
+    apt-get install -y nginx php8.3-fpm php8.3-curl || apt-get install -y php8.1-fpm php8.1-curl
 fi
 
 # 3. Installazione Python e Venv
@@ -149,15 +148,17 @@ cp -r ../scripts/* /opt/vpn-manager/scripts/
 # Installazione dipendenze Python
 log_info "Installazione requirements..."
 /opt/vpn-manager-env/bin/pip install -r /opt/vpn-manager/backend/requirements.txt
+# Ensuring new auth libs are installed if not in requirements.txt (though they should be)
+/opt/vpn-manager-env/bin/pip install "passlib[bcrypt]" "python-jose[cryptography]"
 
-# Generazione API Key
-API_KEY_GENERATED=$(cat /proc/sys/kernel/random/uuid)
+# Generazione Secret Key per JWT (opzionale se gestita in auth.py, ma meglio averla in .env)
+JWT_SECRET=$(openssl rand -hex 32)
 ENV_FILE="/opt/vpn-manager/backend/.env"
-echo "API_KEY=$API_KEY_GENERATED" > "$ENV_FILE"
-# Rimuoviamo vecchie variabili OpenVPN dal .env se presenti
+# Rimuoviamo API_KEY non più necessaria con Auth JWT, ma manteniamo compatibilità se serve
+echo "API_KEY=compatibility_mode_key" > "$ENV_FILE" 
+echo "SECRET_KEY=$JWT_SECRET" >> "$ENV_FILE"
 echo "WIREGUARD_CONFIG_DIR=/etc/wireguard" >> "$ENV_FILE"
 
-API_KEY="$API_KEY_GENERATED"
 
 # Configurazione Servizio Backend
 log_info "Configurazione servizio systemd..."
@@ -198,8 +199,9 @@ log_info "Fase 4/5: Deploy Frontend..."
 mkdir -p /opt/vpn-manager/frontend
 cp -r ../frontend/* /opt/vpn-manager/frontend/
 
-# Configurazione API Key nel frontend
-sed -i "s|define('API_KEY', 'mysecretkey');|define('API_KEY', '$API_KEY');|" /opt/vpn-manager/frontend/config.php
+# Configurazione API Key nel frontend (rimuovere se usiamo solo JWT, ma api_client.php potrebbe averne bisogno per init)
+# Con il nuovo sistema, usiamo login.php
+# sed -i "s|define('API_KEY', 'mysecretkey');|define('API_KEY', '$API_KEY');|" /opt/vpn-manager/frontend/config.php
 
 # Permessi
 chown -R www-data:www-data /opt/vpn-manager/frontend
@@ -222,50 +224,16 @@ sed -i "s/php8.1-fpm.sock/php$PHP_VERSION-fpm.sock/g" /etc/nginx/sites-available
 rm -f /etc/nginx/sites-enabled/default
 ln -sf /etc/nginx/sites-available/vpn-dashboard.conf /etc/nginx/sites-enabled/
 
-# Nginx Basic Auth
-HTPASSWD_FILE="/etc/nginx/.htpasswd"
-if [[ ! -f "$HTPASSWD_FILE" ]]; then
-    log_info "Configurazione utente web..."
-
-    echo -e "\033[1;35m"
-    cat << "EOF"
- _   _  _____  _____  _____    
-| | | |/  ___||  ___|| ___ \    
-| | | |\ `--. | |__  | |_/ /  
-| | | | `--. \|  __| |    /   
-| |_| |/\__/ /| |___ | |\ \  
- \___/ \____/ \____/ \_| \_|   
-EOF
-    echo -e "\033[0m"
-
-    while true; do
-        read -rp "Inserisci il nome utente per accedere alla dashboard web: " NGINX_USER
-
-        if [[ -z "$NGINX_USER" ]]; then
-            log_error "Il nome utente non può essere vuoto."
-            continue
-        fi
-
-        # La password verrà richiesta da htpasswd stesso in modo interattivo
-        htpasswd -Bc "$HTPASSWD_FILE" "$NGINX_USER"
-
-        if [[ $? -eq 0 ]]; then
-            log_success "Utente Nginx Basic Auth '$NGINX_USER' creato con successo."
-            break
-        else
-            log_error "Creazione utente fallita (o annullata). Riprova."
-        fi
-    done
-    
-    chmod 644 "$HTPASSWD_FILE"
-fi
+# Rimuoviamo auth_basic se presente nel conf
+sed -i '/auth_basic/d' /etc/nginx/sites-available/vpn-dashboard.conf
 
 systemctl restart nginx
 
 log_success "Installazione Completata!"
 echo "--------------------------------------------------"
 echo "Dashboard: http://$PUBLIC_IP"
-echo "API Key:   $API_KEY"
+echo "Credenziali Default:"
+echo "Username:  admin"
+echo "Password:  admin"
 echo "--------------------------------------------------"
-echo "NOTA: Il sistema è ora configurato per WireGuard."
-echo "Per creare la prima istanza VPN, usa l'interfaccia web."
+echo "NOTA: Cambia la password al primo accesso!"

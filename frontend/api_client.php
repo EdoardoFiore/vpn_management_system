@@ -1,7 +1,47 @@
 <?php
 // api_client.php
 
+if (session_status() === PHP_SESSION_NONE) {
+    session_start();
+}
+
 require_once 'config.php';
+
+
+
+
+function login_user($username, $password)
+{
+    $url = API_BASE_URL . '/../token'; // URL is /token, not /api/token if logic matches main.py defaults? 
+    // Wait, main.py mount? "app = FastAPI...". Routes are relative to root.
+    // config.php says API_BASE_URL = .../api.
+    // main.py says @app.post("/token"). NOT @app.post("/api/token").
+    // So it is at root.
+
+    // Let's assume API_BASE_URL ends in /api. We need to go up one level.
+    $token_url = str_replace('/api', '/token', API_BASE_URL);
+
+    $ch = curl_init();
+    curl_setopt($ch, CURLOPT_URL, $token_url);
+    curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+    curl_setopt($ch, CURLOPT_POST, true);
+    curl_setopt($ch, CURLOPT_POSTFIELDS, http_build_query([
+        'username' => $username,
+        'password' => $password
+    ]));
+
+    $response = curl_exec($ch);
+    $http_code = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+    curl_close($ch);
+
+    $data = json_decode($response, true);
+
+    if ($http_code == 200 && isset($data['access_token'])) {
+        return ['success' => true, 'token' => $data['access_token']];
+    } else {
+        return ['success' => false, 'error' => $data['detail'] ?? 'Login failed'];
+    }
+}
 
 function api_request($endpoint, $method = 'GET', $data = [], $raw_response = false)
 {
@@ -9,9 +49,12 @@ function api_request($endpoint, $method = 'GET', $data = [], $raw_response = fal
     $ch = curl_init();
 
     $headers = [
-        'Content-Type: application/json',
-        'X-API-Key: ' . API_KEY
+        'Content-Type: application/json'
     ];
+
+    if (isset($_SESSION['jwt_token'])) {
+        $headers[] = 'Authorization: Bearer ' . $_SESSION['jwt_token'];
+    }
 
     curl_setopt($ch, CURLOPT_URL, $url);
     curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
@@ -142,7 +185,8 @@ function get_top_clients()
 
 // --- Groups & Firewall Functions ---
 
-function get_groups($instance_id = null) {
+function get_groups($instance_id = null)
+{
     $url = '/groups';
     if ($instance_id) {
         $url .= '?instance_id=' . urlencode($instance_id);
@@ -150,7 +194,8 @@ function get_groups($instance_id = null) {
     return api_request($url);
 }
 
-function create_group($name, $instance_id, $description) {
+function create_group($name, $instance_id, $description)
+{
     return api_request('/groups', 'POST', [
         'name' => $name,
         'instance_id' => $instance_id,
@@ -158,18 +203,21 @@ function create_group($name, $instance_id, $description) {
     ]);
 }
 
-function delete_group($group_id) {
+function delete_group($group_id)
+{
     return api_request('/groups/' . urlencode($group_id), 'DELETE');
 }
 
-function add_group_member($group_id, $client_identifier, $subnet_info) {
+function add_group_member($group_id, $client_identifier, $subnet_info)
+{
     return api_request('/groups/' . urlencode($group_id) . '/members', 'POST', [
         'client_identifier' => $client_identifier,
         'subnet_info' => $subnet_info
     ]);
 }
 
-function remove_group_member($group_id, $client_identifier, $instance_name) {
+function remove_group_member($group_id, $client_identifier, $instance_name)
+{
     // Note: The backend endpoint expects parameters, but DELETE usually doesn't have body.
     // The backend route is /groups/{group_id}/members/{client_identifier}?instance_name=...
     // Actually in main.py: @app.delete("/api/groups/{group_id}/members/{client_identifier}")
@@ -178,7 +226,8 @@ function remove_group_member($group_id, $client_identifier, $instance_name) {
     return api_request('/groups/' . urlencode($group_id) . '/members/' . urlencode($client_identifier) . '?instance_name=' . urlencode($instance_name), 'DELETE');
 }
 
-function get_rules($group_id = null) {
+function get_rules($group_id = null)
+{
     $url = '/firewall/rules';
     if ($group_id) {
         $url .= '?group_id=' . urlencode($group_id);
@@ -187,7 +236,8 @@ function get_rules($group_id = null) {
 }
 
 // Helper to create rule
-function create_rule($group_id, $action, $protocol, $destination, $port = null, $description = '', $order = null) {
+function create_rule($group_id, $action, $protocol, $destination, $port = null, $description = '', $order = null)
+{
     return api_request('/firewall/rules', 'POST', [
         'group_id' => $group_id,
         'action' => $action,
@@ -199,7 +249,8 @@ function create_rule($group_id, $action, $protocol, $destination, $port = null, 
     ]);
 }
 
-function update_group_firewall_rule($rule_id, $group_id, $action, $protocol, $destination, $port = null, $description = '') {
+function update_group_firewall_rule($rule_id, $group_id, $action, $protocol, $destination, $port = null, $description = '')
+{
     return api_request('/firewall/rules/' . urlencode($rule_id), 'PUT', [
         'group_id' => $group_id, // Needed for backend to locate the rule's group context
         'action' => $action,
@@ -210,15 +261,18 @@ function update_group_firewall_rule($rule_id, $group_id, $action, $protocol, $de
     ]);
 }
 
-function delete_rule($rule_id) {
+function delete_rule($rule_id)
+{
     return api_request('/firewall/rules/' . urlencode($rule_id), 'DELETE');
 }
 
-function reorder_rules($orders) {
+function reorder_rules($orders)
+{
     return api_request('/firewall/rules/order', 'POST', $orders);
 }
 
-function update_instance_firewall_policy($instance_id, $new_policy) {
+function update_instance_firewall_policy($instance_id, $new_policy)
+{
     return api_request("/instances/{$instance_id}/firewall-policy", 'PATCH', [
         'default_policy' => $new_policy
     ]);
@@ -226,41 +280,72 @@ function update_instance_firewall_policy($instance_id, $new_policy) {
 
 // --- Machine Firewall Rules Functions ---
 
-function get_machine_firewall_rules() {
+function get_machine_firewall_rules()
+{
     return api_request('/machine-firewall/rules');
 }
 
-function add_machine_firewall_rule($rule_data) {
+function add_machine_firewall_rule($rule_data)
+{
     return api_request('/machine-firewall/rules', 'POST', $rule_data);
 }
 
-function delete_machine_firewall_rule($rule_id) {
+function delete_machine_firewall_rule($rule_id)
+{
     return api_request('/machine-firewall/rules/' . urlencode($rule_id), 'DELETE');
 }
 
-function update_machine_firewall_rule($rule_id, $rule_data) {
+function update_machine_firewall_rule($rule_id, $rule_data)
+{
     return api_request('/machine-firewall/rules/' . urlencode($rule_id), 'PUT', $rule_data);
 }
 
-function apply_machine_firewall_rules($orders) {
+function apply_machine_firewall_rules($orders)
+{
     return api_request('/machine-firewall/rules/apply', 'PATCH', $orders);
 }
 
 // --- Machine Network Interface Functions ---
 
-function get_machine_network_interfaces() {
+function get_machine_network_interfaces()
+{
     return api_request('/machine-network/interfaces');
 }
 
-function get_machine_network_interface_config($interface_name) {
+function get_machine_network_interface_config($interface_name)
+{
     return api_request('/machine-network/interfaces/' . urlencode($interface_name) . '/config');
 }
 
-function update_machine_network_interface_config($interface_name, $config_data) {
+function update_machine_network_interface_config($interface_name, $config_data)
+{
     return api_request('/machine-network/interfaces/' . urlencode($interface_name) . '/config', 'POST', $config_data);
 }
 
-function apply_global_netplan_config() {
+
+function apply_global_netplan_config()
+{
     return api_request('/machine-network/netplan-apply', 'POST');
+}
+
+// --- User Management Functions ---
+
+function get_users()
+{
+    return api_request('/users');
+}
+
+function create_user($username, $password, $role)
+{
+    return api_request('/users', 'POST', [
+        'username' => $username,
+        'password' => $password,
+        'role' => $role
+    ]);
+}
+
+function delete_user($username)
+{
+    return api_request('/users/' . urlencode($username), 'DELETE');
 }
 ?>

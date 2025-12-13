@@ -1,9 +1,28 @@
-from typing import Optional, List, Dict
-from datetime import datetime
-from sqlmodel import Field, SQLModel, Relationship, JSON, Column
-import uuid
+import enum
+
+# --- Enums ---
+class UserRole(str, enum.Enum):
+    ADMIN = "admin"
+    PARTNER = "partner"
+    OPERATOR = "operator"
+    VIEWER = "viewer"
 
 # --- Models ---
+
+class UserInstance(SQLModel, table=True):
+    """Many-to-Many link between User (Operator) and Instance"""
+    user_id: str = Field(foreign_key="user.username", primary_key=True)
+    instance_id: str = Field(foreign_key="instance.id", primary_key=True)
+
+class User(SQLModel, table=True):
+    username: str = Field(primary_key=True)
+    hashed_password: str
+    role: UserRole = Field(default=UserRole.VIEWER)
+    is_active: bool = True
+    last_login: Optional[datetime] = None
+    
+    # Relationships
+    assigned_instances: List["Instance"] = Relationship(back_populates="assigned_users", link_model=UserInstance)
 
 class InstanceBase(SQLModel):
     name: str
@@ -25,6 +44,7 @@ class Instance(InstanceBase, table=True):
     # Relationships
     clients: List["Client"] = Relationship(back_populates="instance")
     groups: List["Group"] = Relationship(back_populates="instance")
+    assigned_users: List[User] = Relationship(back_populates="assigned_instances", link_model=UserInstance)
 
 class InstanceRead(InstanceBase):
     id: str
