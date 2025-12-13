@@ -119,8 +119,8 @@ switch ($action) {
         }
         $response = download_client_config($instance_id, $client_name);
         if ($response['success']) {
-            header('Content-Type: application/x-openvpn-profile');
-            header('Content-Disposition: attachment; filename="' . $client_name . '.ovpn"');
+            header('Content-Type: text/plain');
+            header('Content-Disposition: attachment; filename="' . $client_name . '.conf"');
             echo $response['body'];
         } else {
             echo json_encode($response);
@@ -155,8 +155,8 @@ switch ($action) {
         $input = file_get_contents('php://input');
         $data = json_decode($input, true);
         if (!$data || !isset($data['name']) || !isset($data['instance_id'])) {
-             echo json_encode(['success' => false, 'body' => ['detail' => 'Dati mancanti.']]);
-             exit;
+            echo json_encode(['success' => false, 'body' => ['detail' => 'Dati mancanti.']]);
+            exit;
         }
         $response = create_group($data['name'], $data['instance_id'], $data['description'] ?? '');
         echo json_encode($response);
@@ -165,8 +165,8 @@ switch ($action) {
     case 'delete_group':
         $group_id = $_POST['group_id'] ?? '';
         if (empty($group_id)) {
-             echo json_encode(['success' => false, 'body' => ['detail' => 'ID gruppo mancante.']]);
-             exit;
+            echo json_encode(['success' => false, 'body' => ['detail' => 'ID gruppo mancante.']]);
+            exit;
         }
         $response = delete_group($group_id);
         echo json_encode($response);
@@ -176,8 +176,8 @@ switch ($action) {
         $input = file_get_contents('php://input');
         $data = json_decode($input, true);
         if (!$data || !isset($data['group_id']) || !isset($data['client_identifier']) || !isset($data['subnet_info'])) {
-             echo json_encode(['success' => false, 'body' => ['detail' => 'Dati mancanti.']]);
-             exit;
+            echo json_encode(['success' => false, 'body' => ['detail' => 'Dati mancanti.']]);
+            exit;
         }
         $response = add_group_member($data['group_id'], $data['client_identifier'], $data['subnet_info']);
         echo json_encode($response);
@@ -187,8 +187,8 @@ switch ($action) {
         $input = file_get_contents('php://input');
         $data = json_decode($input, true);
         if (!$data || !isset($data['group_id']) || !isset($data['client_identifier']) || !isset($data['instance_name'])) {
-             echo json_encode(['success' => false, 'body' => ['detail' => 'Dati mancanti.']]);
-             exit;
+            echo json_encode(['success' => false, 'body' => ['detail' => 'Dati mancanti.']]);
+            exit;
         }
         $response = remove_group_member($data['group_id'], $data['client_identifier'], $data['instance_name']);
         echo json_encode($response);
@@ -199,20 +199,20 @@ switch ($action) {
         $response = get_rules($group_id);
         echo json_encode($response);
         break;
-        
+
     case 'create_rule':
         $input = file_get_contents('php://input');
         $data = json_decode($input, true);
         // Validazione minima
         if (!$data || !isset($data['group_id']) || !isset($data['action']) || !isset($data['destination'])) {
-             echo json_encode(['success' => false, 'body' => ['detail' => 'Dati mancanti.']]);
-             exit;
+            echo json_encode(['success' => false, 'body' => ['detail' => 'Dati mancanti.']]);
+            exit;
         }
         $response = create_rule(
-            $data['group_id'], 
-            $data['action'], 
-            $data['protocol'] ?? 'all', 
-            $data['destination'], 
+            $data['group_id'],
+            $data['action'],
+            $data['protocol'] ?? 'all',
+            $data['destination'],
             $data['port'] ?? null,
             $data['description'] ?? '',
             $data['order'] ?? null
@@ -222,24 +222,24 @@ switch ($action) {
 
     case 'delete_rule':
         $rule_id = $_POST['rule_id'] ?? '';
-         if (empty($rule_id)) {
-             echo json_encode(['success' => false, 'body' => ['detail' => 'ID regola mancante.']]);
-             exit;
+        if (empty($rule_id)) {
+            echo json_encode(['success' => false, 'body' => ['detail' => 'ID regola mancante.']]);
+            exit;
         }
         $response = delete_rule($rule_id);
         echo json_encode($response);
         break;
 
     case 'reorder_rules':
-         $input = file_get_contents('php://input');
-         $data = json_decode($input, true);
-         if (!$data || !isset($data['orders'])) {
-             echo json_encode(['success' => false, 'body' => ['detail' => 'Dati mancanti.']]);
-             exit;
-         }
-         $response = reorder_rules($data['orders']);
-         echo json_encode($response);
-         break;
+        $input = file_get_contents('php://input');
+        $data = json_decode($input, true);
+        if (!$data || !isset($data['orders'])) {
+            echo json_encode(['success' => false, 'body' => ['detail' => 'Dati mancanti.']]);
+            exit;
+        }
+        $response = reorder_rules($data['orders']);
+        echo json_encode($response);
+        break;
 
     case 'update_rule':
         $input = file_get_contents('php://input');

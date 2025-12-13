@@ -16,7 +16,7 @@ import firewall_manager as instance_firewall_manager
 import iptables_manager
 from machine_firewall_manager import machine_firewall_manager
 from database import create_db_and_tables, engine
-from models import User, UserRole, UserInstance
+from models import User, UserRole, UserInstance, Instance
 import auth
 
 # --- Pydantic Models for Auth ---
@@ -89,6 +89,9 @@ class RuleOrderRequest(BaseModel):
     id: str
     order: int
 
+from pydantic import BaseModel, Field, validator
+import ipaddress
+
 class MachineFirewallRuleModel(BaseModel):
     id: Optional[str] = None
     chain: str
@@ -101,11 +104,84 @@ class MachineFirewallRuleModel(BaseModel):
     out_interface: Optional[str] = None
     state: Optional[str] = None
     comment: Optional[str] = None
-    table_name: str = "filter" # Used alias in model but field name here
+    table_name: str = Field(default="filter", alias="table") 
     order: int = 0
     
-    class Config:
-        fields = {'table_name': 'table'}
+    model_config = {
+        "populate_by_name": True
+    }
+
+    @validator('action')
+    def validate_action(cls, v):
+        valid_actions = ["ACCEPT", "DROP", "REJECT", "MASQUERADE", "SNAT", "DNAT", "RETURN", "LOG"]
+        if v.upper() not in valid_actions:
+            raise ValueError(f"Invalid action: {v}. Must be one of {valid_actions}")
+        return v.upper()
+
+    @validator('protocol')
+    def validate_protocol(cls, v):
+        if not v: return None
+        if v.lower() == "all": return "all"
+        valid_protocols = ["tcp", "udp", "icmp", "esp", "ah", "gre", "igmp"] 
+        if v.lower() not in valid_protocols:
+            raise ValueError(f"Invalid protocol: {v}. Must be one of {valid_protocols} or 'all'")
+        return v.lower()
+
+    @validator('port')
+    def validate_port(cls, v):
+        if not v: return None
+        v_str = str(v)
+        if ":" in v_str:
+            # Range check
+            parts = v_str.split(":")
+            if len(parts) != 2: raise ValueError("Invalid port range format (start:end)")
+            try:
+                p1, p2 = int(parts[0]), int(parts[1])
+                if not (1 <= p1 <= 65535 and 1 <= p2 <= 65535): raise ValueError
+            except ValueError:
+                raise ValueError("Ports must be integers between 1 and 65535")
+        else:
+            try:
+                p = int(v_str)
+                if not (1 <= p <= 65535): raise ValueError
+            except ValueError:
+                raise ValueError("Port must be integer between 1 and 65535")
+        return v_str
+
+    @validator('source', 'destination')
+    def validate_ip_network(cls, v):
+        if not v or v.lower() == "any": return None
+        try:
+            # Check if it's a valid IP or CIDR
+            ipaddress.ip_network(v, strict=False)
+        except ValueError:
+             # It might be a single IP, try ip_address
+             try:
+                 ipaddress.ip_address(v)
+             except ValueError:
+                 raise ValueError(f"Invalid IP address or CIDR: {v}")
+        return v
+
+    @validator('table_name')
+    def validate_table(cls, v):
+        valid_tables = ["filter", "nat", "mangle", "raw"]
+        if v.lower() not in valid_tables:
+            raise ValueError(f"Invalid table: {v}")
+        return v.lower()
+    
+    @validator('chain')
+    def validate_chain(cls, v, values):
+        # We can try to validate chain based on table if table is already validated/present
+        # note: 'table_name' might not be in values if it failed validation or hasn't run yet?
+        # Pydantic validates in order of definition usually.
+        # But for simplicity, let's just ensure it's uppercase.
+        # Standard chains: INPUT, OUTPUT, FORWARD, PREROUTING, POSTROUTING
+        # Custom chains allowed? The model is for Machine Firewall, usually standard chains.
+        # Let's verify standard + custom just in case, but usually we restrict to standard for UI safety.
+        # Given UI has dropdown, let's enforce standard chains per table if possible, OR just basic check.
+        # Let's stick to upper() for now to avoid blocking custom usage if user manually posted.
+        if not v: raise ValueError("Chain is required")
+        return v.upper()
 
 class MachineFirewallRuleOrderRequest(BaseModel):
     id: str
@@ -516,7 +592,7 @@ async def create_client(instance_id: str, request: ClientRequest, current_user: 
 
 @app.get("/api/instances/{instance_id}/clients/{client_name}/download", dependencies=[Depends(auth.check_role([UserRole.ADMIN, UserRole.PARTNER, UserRole.TECHNICIAN]))])
 async def download_client_config(instance_id: str, client_name: str, current_user: User = Depends(auth.get_current_user)):
-    """Scarica il file .ovpn per un client."""
+    """Scarica il file .conf per un client."""
     
     # Check access for Technician
     if current_user.role == UserRole.TECHNICIAN:

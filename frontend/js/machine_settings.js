@@ -699,19 +699,43 @@ function openEditMachineRuleModal(ruleId) {
     form.elements['comment'].value = rule.comment || '';
 
     // Update chain options for the specific table and select the correct one
+    // Verify casing
+    const selectedTable = (rule.table || 'filter').toLowerCase();
+    const selectedChain = (rule.chain || '').toUpperCase();
+
+    // Populate Chain Select
     const chainSelect = form.elements['chain'];
-    const selectedTable = rule.table;
     chainSelect.innerHTML = '';
+
     const options = chainOptionsMap[selectedTable] || [];
     options.forEach(optionValue => {
         const option = document.createElement('option');
         option.value = optionValue;
         option.textContent = optionValue;
-        if (optionValue === rule.chain) {
+        if (optionValue === selectedChain) {
             option.selected = true;
         }
         chainSelect.appendChild(option);
     });
+
+    // Add listener for table change to update chains dynamically in Edit Modal too
+    const tableSelect = form.elements['table'];
+    // Remove old listener if any (to avoid duplicates if modal opened multiple times, though simple assignment overwrites 'onchange' property, addEventListener stacks. 
+    // Best to set onchange attribute or handle in init.
+    // Let's set it via onchange property for simplicity here to avoid stacking
+    tableSelect.onchange = function () {
+        const newTable = this.value;
+        const newOptions = chainOptionsMap[newTable] || [];
+        chainSelect.innerHTML = '';
+        newOptions.forEach(opt => {
+            const el = document.createElement('option');
+            el.value = opt;
+            el.textContent = opt;
+            chainSelect.appendChild(el);
+        });
+        updateIptablesPreviewEditModal();
+    };
+
 
     toggleMachinePortInput(rule.protocol, 'edit');
     updateIptablesPreviewEditModal(); // Set initial preview
